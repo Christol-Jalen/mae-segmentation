@@ -72,16 +72,21 @@ def pre_process(images, labels):
 def validate(model, loader_val, criterion, device):
     model.eval()  # Set model to evaluation mode
     val_loss = 0.0
+    images_processed = 0
     with torch.no_grad():  # No gradients needed
         for images, masks in loader_val:
             images, masks = pre_process(images, masks)
             images = images.permute(0, 3, 1, 2).to(device)
             masks = masks.permute(0, 3, 1, 2).to(device)
-            _, outputs, _ = model(images)
+            _, outputs, _ = model(images, active_b1ff=None, vis=True)
             outputs = outputs.sigmoid()
             loss = criterion(outputs, masks)
             val_loss += loss.item()
-    avg_val_loss = val_loss / len(loader_val)
+
+            batch_size = images.size(0)
+            images_processed += batch_size
+            
+    avg_val_loss = val_loss / images_processed
     print(f"Validation Loss: {avg_val_loss}")
     return avg_val_loss
 
