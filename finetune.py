@@ -85,7 +85,7 @@ def validate(model, loader_val, criterion, device):
 
             batch_size = images.size(0)
             images_processed += batch_size
-            
+
     avg_val_loss = val_loss / images_processed
     print(f"Validation Loss: {avg_val_loss}")
     return avg_val_loss
@@ -97,7 +97,7 @@ def visualize_segmentation(model, loader, device):
     images = images.permute(0, 3, 1, 2).to(device)
     
     with torch.no_grad():
-        _, preds, _ = model(images)
+        _, preds, _ = model(images, active_b1ff=None, vis=True)
     preds = preds.sigmoid().cpu()
 
     # Plotting
