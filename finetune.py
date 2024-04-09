@@ -167,7 +167,7 @@ optimizer = optim.SGD(model.parameters(), lr=0.001, momentum=0.9)
 
 # Training loop
 print("start training")
-for epoch in range(2): 
+for epoch in range(3): 
     model.train()
     running_loss = 0.0
     images_processed = 0
