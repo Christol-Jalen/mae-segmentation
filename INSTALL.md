@@ -15,6 +15,9 @@ $ pip install tensorboard
 $ pip install -r requirements.txt
 ```
 
+3. Download pretrained model from this [link](https://drive.google.com/file/d/1STt3w3e5q9eCPZa8VzcJj1zG6p3jLeSF/view?usp=share_link
+)
+
 It is highly recommended to install these versions to ensure a consistent environment for re-implementation.
 
 
