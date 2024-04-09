@@ -102,7 +102,7 @@ def visualize_segmentation(model, loader, device):
 
     # Plotting
     plt.figure(figsize=(10, 4))
-    for i in range(min(4, images.size(0))):  # Show 4 images
+    for i in range(min(4, images.size(0))):  # Show 4 images 
         plt.subplot(2, 4, i + 1)
         plt.imshow(images[i].cpu().permute(1, 2, 0).numpy().astype(np.uint8))
         plt.title("Input Image")
