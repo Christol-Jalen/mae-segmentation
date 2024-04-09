@@ -4,3 +4,5 @@ Pillow
 typed-argument-parser
 timm==0.5.4
 tensorboardx
+h5py
+setuptools==59.5.0
