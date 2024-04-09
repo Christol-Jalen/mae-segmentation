@@ -199,7 +199,7 @@ for epoch in range(2):
         if images_processed % 500 == 0:
             print(f"Processed {images_processed} images, Current Loss: {running_loss/images_processed:.4f}")
 
-    print(f"Epoch {epoch+1}, Loss: {running_loss/len(loader_train)}")
+    print(f"Epoch {epoch+1}, Loss: {running_loss/images_processed}")
     val_loss = validate(model, loader_val, criterion, DEVICE)
 
 # save the model
