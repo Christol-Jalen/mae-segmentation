@@ -9,40 +9,22 @@ from decoder import LightDecoder
 from encoder import SparseEncoder
 from models import build_sparse_encoder
 from spark import SparK
-# import timm
+import torch.distributed as dist
+import matplotlib.pyplot as plt
+import numpy as np
 
-# specify the device to use
-USING_GPU_IF_AVAILABLE = True
+######################### Class and Functions ###################################
+class DiceLoss(nn.Module):
+    def __init__(self, smooth=1.):
+        super(DiceLoss, self).__init__()
+        self.smooth = smooth
 
-_ = torch.empty(1)
-if torch.cuda.is_available() and USING_GPU_IF_AVAILABLE:
-    _ = _.cuda()
-DEVICE = _.device
-print(f'[DEVICE={DEVICE}]')
-
-
-os.environ["CUDA_VISIBLE_DEVICES"]="0"
-DATA_PATH = './data'
-
-
-## settingsbatch_idxbatch_idx
-minibatch_size = 4
-network_size = 16
-learning_rate = 1e-4
-num_epochs = 500
-freq_info = 1
-freq_save = 100
-save_path = "results_pt"
-
-if not os.path.exists(save_path):
-    os.makedirs(save_path)
-
-
-## data loader
-loader_train = H5ImageLoader(DATA_PATH+'/images_train.h5', minibatch_size, DATA_PATH+'/labels_train.h5')
-loader_val = H5ImageLoader(DATA_PATH+'/images_val.h5', 20, DATA_PATH+'/labels_val.h5')
-
-############################################################
+    def forward(self, y_pred, y_true):
+        y_pred = y_pred.sigmoid()  # Applying sigmoid to squash outputs to [0,1] range
+        intersection = (y_pred * y_true).sum(dim=[2,3])
+        dice_score = (2. * intersection + self.smooth) / (y_pred.sum(dim=[2,3]) + y_true.sum(dim=[2,3]) + self.smooth)
+        return 1 - dice_score.mean()
+    
 def build_spark(your_own_pretrained_ckpt: str = ''):
     if len(your_own_pretrained_ckpt) > 0 and os.path.exists(your_own_pretrained_ckpt):
         all_state = torch.load(your_own_pretrained_ckpt, map_location='cpu')
@@ -87,7 +69,88 @@ def pre_process(images, labels):
     labels = torch.stack([torch.tensor(lbl).unsqueeze(-1).float() for lbl in labels])
     return images, labels
 
+def validate(model, loader_val, criterion, device):
+    model.eval()  # Set model to evaluation mode
+    val_loss = 0.0
+    with torch.no_grad():  # No gradients needed
+        for images, masks in loader_val:
+            images, masks = pre_process(images, masks)
+            images = images.permute(0, 3, 1, 2).to(device)
+            masks = masks.permute(0, 3, 1, 2).to(device)
+            _, outputs, _ = model(images)
+            outputs = outputs.sigmoid()
+            loss = criterion(outputs, masks)
+            val_loss += loss.item()
+    avg_val_loss = val_loss / len(loader_val)
+    print(f"Validation Loss: {avg_val_loss}")
+    return avg_val_loss
+
+def visualize_segmentation(model, loader, device):
+    model.eval()
+    images, masks = next(iter(loader))  # Get a batch from the loader
+    images, _ = pre_process(images, masks)
+    images = images.permute(0, 3, 1, 2).to(device)
+    
+    with torch.no_grad():
+        _, preds, _ = model(images)
+    preds = preds.sigmoid().cpu()
+
+    # Plotting
+    plt.figure(figsize=(10, 4))
+    for i in range(min(4, images.size(0))):  # Show 4 images
+        plt.subplot(2, 4, i + 1)
+        plt.imshow(images[i].cpu().permute(1, 2, 0).numpy().astype(np.uint8))
+        plt.title("Input Image")
+        plt.axis('off')
+
+        plt.subplot(2, 4, i + 5)
+        plt.imshow(preds[i].squeeze().numpy(), cmap='gray')
+        plt.title("Predicted Mask")
+        plt.axis('off')
+    plt.show()
+
 ###########################################################
+
+# Set the environment variables for distributed training
+os.environ['MASTER_ADDR'] = 'localhost'  # or another appropriate address
+os.environ['MASTER_PORT'] = '12355'  # choose an open port
+
+# Initialise distribute for single GPU training
+dist.init_process_group(backend='nccl', init_method='env://', rank=0, world_size=1)
+
+# specify the device to use
+USING_GPU_IF_AVAILABLE = True
+
+_ = torch.empty(1)
+if torch.cuda.is_available() and USING_GPU_IF_AVAILABLE:
+    _ = _.cuda()
+DEVICE = _.device
+print(f'[DEVICE={DEVICE}]')
+
+
+os.environ["CUDA_VISIBLE_DEVICES"]="0"
+DATA_PATH = './data'
+
+
+## settingsbatch_idxbatch_idx
+minibatch_size = 4
+network_size = 16
+learning_rate = 1e-4
+num_epochs = 500
+freq_info = 1
+freq_save = 100
+save_path = "results_pt"
+best_val_loss = float('inf')
+
+if not os.path.exists(save_path):
+    os.makedirs(save_path)
+
+
+## data loader
+loader_train = H5ImageLoader(DATA_PATH+'/images_train.h5', minibatch_size, DATA_PATH+'/labels_train.h5')
+loader_val = H5ImageLoader(DATA_PATH+'/images_val.h5', 20, DATA_PATH+'/labels_val.h5')
+
+
 model, input_size = build_spark()
 print("model built")
 
@@ -98,30 +161,50 @@ print("model built")
 # Fine tune the model
 # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 model.to(DEVICE)
-criterion = nn.CrossEntropyLoss()
+# criterion = nn.CrossEntropyLoss()
+criterion = DiceLoss()
 optimizer = optim.SGD(model.parameters(), lr=0.001, momentum=0.9)
 
 # Training loop
 print("start training")
-for epoch in range(10):  # Number of epochs
+for epoch in range(2): 
     model.train()
     running_loss = 0.0
-    for images, masks in loader_train:  #  masks are directly the second element
+    images_processed = 0
+    for i, (images, masks) in enumerate(loader_train):
+        # Pre-process inputs and masks
         images, masks = pre_process(images, masks)
         images = images.permute(0, 3, 1, 2)
         masks = masks.permute(0, 3, 1, 2)
-        print("Shape of images tensor:", images.shape)
-        print("Shape of masks tensor:", masks.shape)
-        images, masks = images.to(DEVICE), masks.to(DEVICE, dtype=torch.long)
+        # For binary segmentation, masks might need to be squeezed to remove the channel dimension if it's 1
+        # masks = masks.squeeze(1)  
+        images, masks = images.to(DEVICE), masks.to(DEVICE)
 
         optimizer.zero_grad()
-        outputs = model(images) 
+        _, outputs, _ = model(images, active_b1ff=None, vis=True)
+        outputs = outputs.sigmoid()  # Apply sigmoid to outputs to squash them to [0,1] range
 
-        # Ensure outputs and masks are correctly aligned; might need to adjust dimensions
+        outputs.requires_grad_()
+        masks.requires_grad_()
         loss = criterion(outputs, masks)
         loss.backward()
         optimizer.step()
 
         running_loss += loss.item()
 
+        batch_size = images.size(0)
+        images_processed += batch_size  # Update the counter by the number of images in the current batch
+
+        # Report the current average loss after every 500 images
+        if images_processed % 500 == 0:
+            print(f"Processed {images_processed} images, Current Loss: {running_loss/images_processed:.4f}")
+
     print(f"Epoch {epoch+1}, Loss: {running_loss/len(loader_train)}")
+    val_loss = validate(model, loader_val, criterion, DEVICE)
+
+# save the model
+torch.save(model.state_dict(), os.path.join(save_path, 'best_model.pth'))
+print("Model saved.")
+
+# After training, visualize segmentation output
+visualize_segmentation(model, loader_val, DEVICE)
