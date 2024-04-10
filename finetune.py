@@ -108,8 +108,10 @@ def visualize_segmentation(model, loader, device):
         plt.title("Input Image")
         plt.axis('off')
 
+        predicted_mask = preds[i].squeeze().numpy()
+        predicted_mask = predicted_mask[0]
         plt.subplot(2, 4, i + 5)
-        plt.imshow(preds[i].squeeze().numpy(), cmap='gray')
+        plt.imshow(predicted_mask, cmap='gray')
         plt.title("Predicted Mask")
         plt.axis('off')
     plt.show()
@@ -172,7 +174,7 @@ optimizer = optim.SGD(model.parameters(), lr=0.001, momentum=0.9)
 
 # Training loop
 print("start training")
-for epoch in range(3): 
+for epoch in range(10): 
     model.train()
     running_loss = 0.0
     images_processed = 0
