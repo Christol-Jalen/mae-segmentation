@@ -78,7 +78,7 @@ def validate(model, loader_val, criterion, device):
             images, masks = pre_process(images, masks)
             images = images.permute(0, 3, 1, 2).to(device)
             masks = masks.permute(0, 3, 1, 2).to(device)
-            _, _, outputs = model(images, active_b1ff=None, vis=True)
+            _, _, outputs = model(images, active_b1ff=active_b1ff, vis=True)
             outputs = outputs.sigmoid()
             loss = criterion(outputs, masks)
             val_loss += loss.item()
@@ -97,7 +97,7 @@ def visualize_segmentation(model, loader, device):
     images = images.permute(0, 3, 1, 2).to(device)
     
     with torch.no_grad():
-        _, preds, _ = model(images, active_b1ff=None, vis=True)
+        _, _, preds = model(images, active_b1ff=active_b1ff, vis=True)
     preds = preds.sigmoid().cpu()
 
     # Plotting
@@ -108,8 +108,10 @@ def visualize_segmentation(model, loader, device):
         plt.title("Input Image")
         plt.axis('off')
 
+        predicted_mask = preds[i].squeeze().numpy()
+        predicted_mask = predicted_mask[0]
         plt.subplot(2, 4, i + 5)
-        plt.imshow(preds[i].squeeze().numpy(), cmap='gray')
+        plt.imshow(predicted_mask, cmap='gray')
         plt.title("Predicted Mask")
         plt.axis('off')
     plt.show()
@@ -147,6 +149,16 @@ freq_save = 100
 save_path = "results_pt"
 best_val_loss = float('inf')
 
+active_b1ff = torch.tensor([
+    [1, 1, 1, 1, 1, 1, 1],
+    [1, 1, 1, 1, 1, 1, 1],
+    [1, 1, 1, 1, 1, 1, 1],
+    [1, 1, 1, 1, 1, 1, 1],
+    [1, 1, 1, 1, 1, 1, 1],
+    [1, 1, 1, 1, 1, 1, 1],
+    [1, 1, 1, 1, 1, 1, 1],
+], device=DEVICE).bool().reshape(1, 1, 7, 7)
+
 if not os.path.exists(save_path):
     os.makedirs(save_path)
 
@@ -172,7 +184,7 @@ optimizer = optim.SGD(model.parameters(), lr=0.001, momentum=0.9)
 
 # Training loop
 print("start training")
-for epoch in range(5): 
+for epoch in range(10): 
     model.train()
     running_loss = 0.0
     images_processed = 0
@@ -186,7 +198,7 @@ for epoch in range(5):
         images, masks = images.to(DEVICE), masks.to(DEVICE)
 
         optimizer.zero_grad()
-        _, _, outputs = model(images, active_b1ff=None, vis=True)
+        _, _, outputs = model(images, active_b1ff=active_b1ff, vis=True)
         outputs = outputs.sigmoid()  # Apply sigmoid to outputs to squash them to [0,1] range
 
         outputs.requires_grad_()
