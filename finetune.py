@@ -78,7 +78,7 @@ def validate(model, loader_val, criterion, device):
             images, masks = pre_process(images, masks)
             images = images.permute(0, 3, 1, 2).to(device)
             masks = masks.permute(0, 3, 1, 2).to(device)
-            _, outputs, _ = model(images, active_b1ff=None, vis=True)
+            _, _, outputs = model(images, active_b1ff=None, vis=True)
             outputs = outputs.sigmoid()
             loss = criterion(outputs, masks)
             val_loss += loss.item()
@@ -102,16 +102,14 @@ def visualize_segmentation(model, loader, device):
 
     # Plotting
     plt.figure(figsize=(10, 4))
-    for i in range(min(4, images.size(0))):  # Show 4 images 
+    for i in range(min(4, images.size(0))):  # Show 4 images
         plt.subplot(2, 4, i + 1)
         plt.imshow(images[i].cpu().permute(1, 2, 0).numpy().astype(np.uint8))
         plt.title("Input Image")
         plt.axis('off')
 
-        predicted_mask = preds[i].squeeze().numpy()
-        predicted_mask = predicted_mask[0]
         plt.subplot(2, 4, i + 5)
-        plt.imshow(predicted_mask, cmap='gray')
+        plt.imshow(preds[i].squeeze().numpy(), cmap='gray')
         plt.title("Predicted Mask")
         plt.axis('off')
     plt.show()
@@ -174,7 +172,7 @@ optimizer = optim.SGD(model.parameters(), lr=0.001, momentum=0.9)
 
 # Training loop
 print("start training")
-for epoch in range(10): 
+for epoch in range(5): 
     model.train()
     running_loss = 0.0
     images_processed = 0
@@ -188,7 +186,7 @@ for epoch in range(10):
         images, masks = images.to(DEVICE), masks.to(DEVICE)
 
         optimizer.zero_grad()
-        _, outputs, _ = model(images, active_b1ff=None, vis=True)
+        _, _, outputs = model(images, active_b1ff=None, vis=True)
         outputs = outputs.sigmoid()  # Apply sigmoid to outputs to squash them to [0,1] range
 
         outputs.requires_grad_()
