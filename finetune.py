@@ -12,6 +12,7 @@ from spark import SparK
 import torch.distributed as dist
 import matplotlib.pyplot as plt
 import numpy as np
+import math
 
 ######################### Class and Functions ###################################
 class DiceLoss(nn.Module):
@@ -30,7 +31,7 @@ class DiceLoss(nn.Module):
         """
         Compute the Dice loss, which is -1 times the Dice score.
         """
-        return -self.dice_score(ps, ts)
+        return -self.dice_score(ps, ts) 
 
     def dice_binary(self, ps, ts):
         """
@@ -95,8 +96,9 @@ def validate(model, loader_val, criterion, device):
             masks = masks.permute(0, 3, 1, 2).to(device)
             _, _, outputs = model(images, active_b1ff=active_b1ff, vis=True)
             #outputs = outputs.sigmoid()
-            loss = loss.mean()
+            outputs = outputs.sigmoid()  # Ensure outputs are probabilities
             loss = criterion.dice_loss(outputs, masks)
+            loss = loss.mean()
             val_loss += loss.item()
 
             batch_size = images.size(0)
@@ -130,6 +132,40 @@ def visualize_segmentation(model, loader, device):
         plt.imshow(predicted_mask, cmap='gray')
         plt.title("Predicted Mask")
         plt.axis('off')
+    plt.show()
+
+def visualize_images_and_masks(images, masks, num_images=4):
+    """
+    Visualize the first `num_images` images and masks in a batch.
+
+    Parameters:
+    - images (torch.Tensor): Tensor containing images.
+    - masks (torch.Tensor): Tensor containing corresponding masks.
+    - num_images (int): Number of images and masks to display.
+    """
+    images = images.permute(0, 2, 3, 1)  # Change from BxCxHxW to BxHxWxC for visualization
+    fig, axs = plt.subplots(2, num_images, figsize=(num_images * 4, 8))  # Set up the subplot grid
+
+    for i in range(num_images):
+        img = images[i].cpu().detach().numpy()
+        if img.min() < 0 or img.max() > 1:
+            # Normalize to [0, 1]
+            img = (img - img.min()) / (img.max() - img.min())
+
+        # Display image
+        ax = axs[0, i]
+        ax.imshow(img, interpolation='nearest')
+        ax.axis('off')
+        ax.set_title('Image')
+
+        # Display mask
+        ax = axs[1, i]
+        mask = masks[i].squeeze()  # Remove channel dim if it's there
+        ax.imshow(mask.cpu().detach().numpy(), cmap='gray', interpolation='nearest')
+        ax.axis('off')
+        ax.set_title('Mask')
+
+    plt.tight_layout()
     plt.show()
 
 ###########################################################
@@ -196,11 +232,11 @@ print("model built")
 model.to(DEVICE)
 # criterion = nn.CrossEntropyLoss()
 criterion = DiceLoss()
-optimizer = optim.SGD(model.parameters(), lr=0.001, momentum=0.9)
+optimizer = optim.SGD(model.parameters(), lr=0.0001, momentum=0.9)
 
 # Training loop
 print("start training")
-for epoch in range(10): 
+for epoch in range(5): 
     model.train()
     running_loss = 0.0
     images_processed = 0
@@ -215,9 +251,14 @@ for epoch in range(10):
 
         optimizer.zero_grad()
         _, _, outputs = model(images, active_b1ff=active_b1ff, vis=True)
+        print(outputs.shape)
+
+        #if i == 500:  # Only visualize the first batch
+            
 
         outputs.requires_grad_()
         masks.requires_grad_()
+        outputs = outputs.sigmoid()  # Ensure outputs are probabilities
         loss = criterion.dice_loss(outputs, masks)
         loss = loss.mean()
         loss.backward()
@@ -229,8 +270,9 @@ for epoch in range(10):
         images_processed += batch_size  # Update the counter by the number of images in the current batch
 
         # Report the current average loss after every 500 images
-        if images_processed % 500 == 0:
+        if images_processed % 1000 == 0:
             print(f"Processed {images_processed} images, Current Loss: {running_loss/images_processed:.4f}")
+            visualize_images_and_masks(outputs, masks)
 
     print(f"Epoch {epoch+1}, Loss: {running_loss/images_processed}")
     val_loss = validate(model, loader_val, criterion, DEVICE)
