@@ -41,7 +41,7 @@ class DiceLoss(nn.Module):
         ts = (ts >= 0.5).float()
         return self.dice_score(ps, ts)
     
-def build_spark(your_own_pretrained_ckpt: str = ''):
+def build_spark(your_own_pretrained_ckpt: str = '', output_channels=1):
     if len(your_own_pretrained_ckpt) > 0 and os.path.exists(your_own_pretrained_ckpt):
         all_state = torch.load(your_own_pretrained_ckpt, map_location='cpu')
         input_size, model_name = all_state['input_size'], all_state['arch']
@@ -66,13 +66,24 @@ def build_spark(your_own_pretrained_ckpt: str = ''):
     config = pretrained_state['config']
     enc: SparseEncoder = build_sparse_encoder(model_name, input_size=input_size)
     spark = SparK(
-        sparse_encoder=enc, dense_decoder=LightDecoder(enc.downsample_raito, sbn=False),
-        mask_ratio=config['mask_ratio'], densify_norm=config['densify_norm_str'], sbn=config['sbn'],
-    ).to(DEVICE)
+        sparse_encoder=enc, 
+        dense_decoder=LightDecoder(enc.downsample_raito, sbn=False, output_channels=output_channels),
+        mask_ratio=config['mask_ratio'], 
+        densify_norm=config['densify_norm_str'], 
+        sbn=config['sbn'],).to(DEVICE)
     spark.eval(), [p.requires_grad_(False) for p in spark.parameters()]
+
+    # Adjusting loading to handle incompatible keys
+    pretrained_dict = pretrained_state
+    model_dict = spark.state_dict()
+
+    # 1. Filter out unnecessary keys
+    pretrained_dict = {k: v for k, v in pretrained_dict.items() if k in model_dict and model_dict[k].size() == v.size()}
+    # 2. Overwrite entries in the existing state dict
+    model_dict.update(pretrained_dict)
     
     # load the checkpoint
-    missing, unexpected = spark.load_state_dict(pretrained_state, strict=False)
+    missing, unexpected = spark.load_state_dict(model_dict, strict=False)
     assert len(missing) == 0, f'load_state_dict missing keys: {missing}'
     assert len(unexpected) == 0, f'load_state_dict unexpected keys: {unexpected}'
     del pretrained_state
@@ -232,7 +243,7 @@ print("model built")
 model.to(DEVICE)
 # criterion = nn.CrossEntropyLoss()
 criterion = DiceLoss()
-optimizer = optim.SGD(model.parameters(), lr=0.0001, momentum=0.9)
+optimizer = optim.SGD(model.parameters(), lr=0.00001, momentum=0.9)
 
 # Training loop
 print("start training")
@@ -250,11 +261,7 @@ for epoch in range(5):
         images, masks = images.to(DEVICE), masks.to(DEVICE)
 
         optimizer.zero_grad()
-        _, _, outputs = model(images, active_b1ff=active_b1ff, vis=True)
-        print(outputs.shape)
-
-        #if i == 500:  # Only visualize the first batch
-            
+        _, _, outputs = model(images, active_b1ff=active_b1ff, vis=True)  
 
         outputs.requires_grad_()
         masks.requires_grad_()
@@ -270,7 +277,7 @@ for epoch in range(5):
         images_processed += batch_size  # Update the counter by the number of images in the current batch
 
         # Report the current average loss after every 500 images
-        if images_processed % 1000 == 0:
+        if images_processed % 2500 == 0:
             print(f"Processed {images_processed} images, Current Loss: {running_loss/images_processed:.4f}")
             visualize_images_and_masks(outputs, masks)
 
