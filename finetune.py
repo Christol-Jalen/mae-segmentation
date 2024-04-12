@@ -15,15 +15,30 @@ import numpy as np
 
 ######################### Class and Functions ###################################
 class DiceLoss(nn.Module):
-    def __init__(self, smooth=1.):
-        super(DiceLoss, self).__init__()
-        self.smooth = smooth
+    def __init__(self, eps=1e-7):
+        self.eps = eps
 
-    def forward(self, y_pred, y_true):
-        y_pred = y_pred.sigmoid()  # Applying sigmoid to squash outputs to [0,1] range
-        intersection = (y_pred * y_true).sum(dim=[2,3])
-        dice_score = (2. * intersection + self.smooth) / (y_pred.sum(dim=[2,3]) + y_true.sum(dim=[2,3]) + self.smooth)
-        return 1 - dice_score.mean()
+    def dice_score(self, ps, ts):
+        """
+        Compute the Dice score, a measure of overlap between two sets.
+        """
+        numerator = torch.sum(ts * ps, dim=(1, 2, 3)) * 2 + self.eps
+        denominator = torch.sum(ts, dim=(1, 2, 3)) + torch.sum(ps, dim=(1, 2, 3)) + self.eps
+        return numerator / denominator
+
+    def dice_loss(self, ps, ts):
+        """
+        Compute the Dice loss, which is -1 times the Dice score.
+        """
+        return -self.dice_score(ps, ts)
+
+    def dice_binary(self, ps, ts):
+        """
+        Threshold predictions and true values at 0.5, convert to float, and compute the Dice score.
+        """
+        ps = (ps >= 0.5).float()
+        ts = (ts >= 0.5).float()
+        return self.dice_score(ps, ts)
     
 def build_spark(your_own_pretrained_ckpt: str = ''):
     if len(your_own_pretrained_ckpt) > 0 and os.path.exists(your_own_pretrained_ckpt):
@@ -79,8 +94,9 @@ def validate(model, loader_val, criterion, device):
             images = images.permute(0, 3, 1, 2).to(device)
             masks = masks.permute(0, 3, 1, 2).to(device)
             _, _, outputs = model(images, active_b1ff=active_b1ff, vis=True)
-            outputs = outputs.sigmoid()
-            loss = criterion(outputs, masks)
+            #outputs = outputs.sigmoid()
+            loss = loss.mean()
+            loss = criterion.dice_loss(outputs, masks)
             val_loss += loss.item()
 
             batch_size = images.size(0)
@@ -199,11 +215,11 @@ for epoch in range(10):
 
         optimizer.zero_grad()
         _, _, outputs = model(images, active_b1ff=active_b1ff, vis=True)
-        outputs = outputs.sigmoid()  # Apply sigmoid to outputs to squash them to [0,1] range
 
         outputs.requires_grad_()
         masks.requires_grad_()
-        loss = criterion(outputs, masks)
+        loss = criterion.dice_loss(outputs, masks)
+        loss = loss.mean()
         loss.backward()
         optimizer.step()
 
