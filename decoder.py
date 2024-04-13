@@ -32,7 +32,7 @@ class UNetBlock(nn.Module):
 
 
 class LightDecoder(nn.Module):
-    def __init__(self, up_sample_ratio, width=768, sbn=True, output_channels=3):   # added output_channels input
+    def __init__(self, up_sample_ratio, width=768, sbn=True, output_channels=1):   # added output_channels input
         super().__init__()
         self.width = width
         assert is_pow2n(up_sample_ratio)

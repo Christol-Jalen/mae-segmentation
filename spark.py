@@ -110,31 +110,31 @@ class SparK(nn.Module):
         
         # step4. Decode and reconstruct
         rec_bchw = self.dense_decoder(to_dec)
-        inp, rec = self.patchify(inp_bchw), self.patchify(rec_bchw)   # inp and rec: (B, L = f*f, N = C*downsample_raito**2)
+        #inp, rec = self.patchify(inp_bchw), self.patchify(rec_bchw)   # inp and rec: (B, L = f*f, N = C*downsample_raito**2)
 
         ##############################################################################
-        # Normalize input here, assuming input needs to match the output channels
-        if inp_bchw.size(1) != rec_bchw.size(1):  # Check if channel sizes differ
-            inp = inp.mean(dim=2, keepdim=True)  # Reduce input channels by averaging to fit the 1-channel ground truth
+        # # Normalize input here, assuming input needs to match the output channels
+        # if inp_bchw.size(1) != rec_bchw.size(1):  # Check if channel sizes differ
+        #     inp = inp.mean(dim=2, keepdim=True)  # Reduce input channels by averaging to fit the 1-channel ground truth
         ##############################################################################
 
-        mean = inp.mean(dim=-1, keepdim=True)
-        var = (inp.var(dim=-1, keepdim=True) + 1e-6) ** .5
-        inp = (inp - mean) / var
+        #mean = inp.mean(dim=-1, keepdim=True)
+        #var = (inp.var(dim=-1, keepdim=True) + 1e-6) ** .5
+        #inp = (inp - mean) / var
 
 
-        l2_loss = ((rec - inp) ** 2).mean(dim=2, keepdim=False)    # (B, L, C) ==mean==> (B, L)
+        #l2_loss = ((rec - inp) ** 2).mean(dim=2, keepdim=False)    # (B, L, C) ==mean==> (B, L)
         
         non_active = active_b1ff.logical_not().int().view(active_b1ff.shape[0], -1)  # (B, 1, f, f) => (B, L)
-        recon_loss = l2_loss.mul_(non_active).sum() / (non_active.sum() + 1e-8)  # loss only on masked (non-active) patches
+        #recon_loss = l2_loss.mul_(non_active).sum() / (non_active.sum() + 1e-8)  # loss only on masked (non-active) patches
         
         if vis:
             masked_bchw = inp_bchw * active_b1hw
-            rec_bchw = self.unpatchify(rec * var + mean)
+            #rec_bchw = self.unpatchify(rec * var + mean)
             rec_or_inp = torch.where(active_b1hw, inp_bchw, rec_bchw)
-            return inp_bchw, masked_bchw, rec_or_inp
+            return inp_bchw, masked_bchw, rec_bchw
         else:
-            return recon_loss
+            return None
     
     def patchify(self, bchw):
         p = self.downsample_raito

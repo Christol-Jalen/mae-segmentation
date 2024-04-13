@@ -41,7 +41,7 @@ class DiceLoss(nn.Module):
         ts = (ts >= 0.5).float()
         return self.dice_score(ps, ts)
     
-def build_spark(your_own_pretrained_ckpt: str = '', output_channels=1):
+def build_spark(your_own_pretrained_ckpt: str = ''):
     if len(your_own_pretrained_ckpt) > 0 and os.path.exists(your_own_pretrained_ckpt):
         all_state = torch.load(your_own_pretrained_ckpt, map_location='cpu')
         input_size, model_name = all_state['input_size'], all_state['arch']
@@ -67,7 +67,7 @@ def build_spark(your_own_pretrained_ckpt: str = '', output_channels=1):
     enc: SparseEncoder = build_sparse_encoder(model_name, input_size=input_size)
     spark = SparK(
         sparse_encoder=enc, 
-        dense_decoder=LightDecoder(enc.downsample_raito, sbn=False, output_channels=output_channels),
+        dense_decoder=LightDecoder(enc.downsample_raito, sbn=False),
         mask_ratio=config['mask_ratio'], 
         densify_norm=config['densify_norm_str'], 
         sbn=config['sbn'],).to(DEVICE)
@@ -145,7 +145,41 @@ def visualize_segmentation(model, loader, device):
         plt.axis('off')
     plt.show()
 
-def visualize_images_and_masks(images, masks, num_images=4):
+# def visualize_images_and_masks(images, masks, num_images=4):
+#     """
+#     Visualize the first `num_images` images and masks in a batch.
+
+#     Parameters:
+#     - images (torch.Tensor): Tensor containing images.
+#     - masks (torch.Tensor): Tensor containing corresponding masks.
+#     - num_images (int): Number of images and masks to display.
+#     """
+#     images = images.permute(0, 2, 3, 1)  # Change from BxCxHxW to BxHxWxC for visualization
+#     fig, axs = plt.subplots(2, num_images, figsize=(num_images * 4, 8))  # Set up the subplot grid
+
+#     for i in range(num_images):
+#         img = images[i].cpu().detach().numpy()
+#         if img.min() < 0 or img.max() > 1:
+#             # Normalize to [0, 1]
+#             img = (img - img.min()) / (img.max() - img.min())
+
+#         # Display image
+#         ax = axs[0, i]
+#         ax.imshow(img, interpolation='nearest')
+#         ax.axis('off')
+#         ax.set_title('Image')
+
+#         # Display mask
+#         ax = axs[1, i]
+#         mask = masks[i].squeeze()  # Remove channel dim if it's there
+#         ax.imshow(mask.cpu().detach().numpy(), cmap='gray', interpolation='nearest')
+#         ax.axis('off')
+#         ax.set_title('Mask')
+
+#     plt.tight_layout()
+#     plt.show()
+    
+def visualize_images_and_masks(images, masks, num_images=1):
     """
     Visualize the first `num_images` images and masks in a batch.
 
@@ -154,27 +188,22 @@ def visualize_images_and_masks(images, masks, num_images=4):
     - masks (torch.Tensor): Tensor containing corresponding masks.
     - num_images (int): Number of images and masks to display.
     """
-    images = images.permute(0, 2, 3, 1)  # Change from BxCxHxW to BxHxWxC for visualization
+    #images = images.permute(0, 2, 3, 1)  # Change from BxCxHxW to BxHxWxC for visualization
     fig, axs = plt.subplots(2, num_images, figsize=(num_images * 4, 8))  # Set up the subplot grid
 
-    for i in range(num_images):
-        img = images[i].cpu().detach().numpy()
-        if img.min() < 0 or img.max() > 1:
-            # Normalize to [0, 1]
-            img = (img - img.min()) / (img.max() - img.min())
+     # Display image
+    ax = axs[0]
+    img = images.squeeze()  # Remove channel dim if it's there
+    ax.imshow(img.cpu().detach().numpy(), cmap='gray', interpolation='nearest')
+    ax.axis('off')
+    ax.set_title('Prediction')
 
-        # Display image
-        ax = axs[0, i]
-        ax.imshow(img, interpolation='nearest')
-        ax.axis('off')
-        ax.set_title('Image')
-
-        # Display mask
-        ax = axs[1, i]
-        mask = masks[i].squeeze()  # Remove channel dim if it's there
-        ax.imshow(mask.cpu().detach().numpy(), cmap='gray', interpolation='nearest')
-        ax.axis('off')
-        ax.set_title('Mask')
+    # Display mask
+    ax = axs[1]
+    mask = masks.squeeze()  # Remove channel dim if it's there
+    ax.imshow(mask.cpu().detach().numpy(), cmap='gray', interpolation='nearest')
+    ax.axis('off')
+    ax.set_title('Mask')
 
     plt.tight_layout()
     plt.show()
@@ -203,7 +232,7 @@ DATA_PATH = './data'
 
 
 ## settingsbatch_idxbatch_idx
-minibatch_size = 4
+minibatch_size = 1
 network_size = 16
 learning_rate = 1e-4
 num_epochs = 500
@@ -247,7 +276,7 @@ optimizer = optim.SGD(model.parameters(), lr=0.00001, momentum=0.9)
 
 # Training loop
 print("start training")
-for epoch in range(5): 
+for epoch in range(10): 
     model.train()
     running_loss = 0.0
     images_processed = 0
@@ -279,10 +308,21 @@ for epoch in range(5):
         # Report the current average loss after every 500 images
         if images_processed % 2500 == 0:
             print(f"Processed {images_processed} images, Current Loss: {running_loss/images_processed:.4f}")
-            visualize_images_and_masks(outputs, masks)
+            # visualize_images_and_masks(outputs, masks)
+            # Print shapes of images, masks, and outputs
+            # print("Shapes - Images:", images.shape, "Masks:", masks.shape, "Outputs:", outputs.shape)
+
+            # # Print 4 pixel values for each of images, masks, and outputs
+            # print("Pixel Values - Images:") 
+            # print(images[:,:,:4,:4])
+            # print("Masks:")
+            # print(masks[:,:,:4,:4])
+            # print("Outputs:")
+            # print(outputs[:,:,:4,:4])
 
     print(f"Epoch {epoch+1}, Loss: {running_loss/images_processed}")
     val_loss = validate(model, loader_val, criterion, DEVICE)
+    visualize_images_and_masks(outputs, masks)
 
 # save the model
 torch.save(model.state_dict(), os.path.join(save_path, 'best_model.pth'))
