@@ -106,7 +106,6 @@ def validate(model, loader_val, criterion, device):
             images = images.permute(0, 3, 1, 2).to(device)
             masks = masks.permute(0, 3, 1, 2).to(device)
             _, _, outputs = model(images, active_b1ff=active_b1ff, vis=True)
-            #outputs = outputs.sigmoid()
             outputs = outputs.sigmoid()  # Ensure outputs are probabilities
             loss = criterion.dice_loss(outputs, masks)
             loss = loss.mean()
@@ -115,7 +114,7 @@ def validate(model, loader_val, criterion, device):
             batch_size = images.size(0)
             images_processed += batch_size
 
-    avg_val_loss = val_loss / images_processed
+    avg_val_loss = 20 * val_loss / images_processed 
     print(f"Validation Loss: {avg_val_loss}")
     return avg_val_loss
 
@@ -130,20 +129,7 @@ def visualize_segmentation(model, loader, device):
     preds = preds.sigmoid().cpu()
 
     # Plotting
-    plt.figure(figsize=(10, 4))
-    for i in range(min(4, images.size(0))):  # Show 4 images
-        plt.subplot(2, 4, i + 1)
-        plt.imshow(images[i].cpu().permute(1, 2, 0).numpy().astype(np.uint8))
-        plt.title("Input Image")
-        plt.axis('off')
-
-        predicted_mask = preds[i].squeeze().numpy()
-        predicted_mask = predicted_mask[0]
-        plt.subplot(2, 4, i + 5)
-        plt.imshow(predicted_mask, cmap='gray')
-        plt.title("Predicted Mask")
-        plt.axis('off')
-    plt.show()
+    visualize_images_and_masks(images, preds, masks)
 
 # def visualize_images_and_masks(images, masks, num_images=4):
 #     """
@@ -179,7 +165,7 @@ def visualize_segmentation(model, loader, device):
 #     plt.tight_layout()
 #     plt.show()
     
-def visualize_images_and_masks(images, masks, num_images=1):
+def visualize_images_and_masks(images, outputs, masks, num_images=1):
     """
     Visualize the first `num_images` images and masks in a batch.
 
@@ -188,25 +174,54 @@ def visualize_images_and_masks(images, masks, num_images=1):
     - masks (torch.Tensor): Tensor containing corresponding masks.
     - num_images (int): Number of images and masks to display.
     """
-    #images = images.permute(0, 2, 3, 1)  # Change from BxCxHxW to BxHxWxC for visualization
-    fig, axs = plt.subplots(2, num_images, figsize=(num_images * 4, 8))  # Set up the subplot grid
+    images = images.permute(0, 2, 3, 1)  # Change from BxCxHxW to BxHxWxC for visualization
+    fig, axs = plt.subplots(3, num_images, figsize=(num_images * 4, 8))  # Set up the subplot grid
 
-     # Display image
+    for i in range(num_images):
+        img = images[i].cpu().detach().numpy()
+        if img.min() < 0 or img.max() > 1:
+            # Normalize to [0, 1]
+            img = (img - img.min()) / (img.max() - img.min())
+
+    # Display image
     ax = axs[0]
-    img = images.squeeze()  # Remove channel dim if it's there
-    ax.imshow(img.cpu().detach().numpy(), cmap='gray', interpolation='nearest')
+    ax.imshow(img, interpolation='nearest')
+    ax.axis('off')
+    ax.set_title('Image')
+    ax.set_title('Input')
+    
+    # Display output
+    ax = axs[1]
+    out = outputs.squeeze()  # Remove channel dim if it's there
+    ax.imshow(out.cpu().detach().numpy(), interpolation='nearest')
     ax.axis('off')
     ax.set_title('Prediction')
 
     # Display mask
-    ax = axs[1]
+    ax = axs[2]
     mask = masks.squeeze()  # Remove channel dim if it's there
     ax.imshow(mask.cpu().detach().numpy(), cmap='gray', interpolation='nearest')
     ax.axis('off')
-    ax.set_title('Mask')
+    ax.set_title('Ground Truth')
 
     plt.tight_layout()
     plt.show()
+
+
+def post_process(output):
+    """
+    Post-processes the output segmentation mask tensor.
+    
+    Args:
+        output (torch.Tensor): Output segmentation mask tensor of shape [1, 1, 224, 224].
+        
+    Returns:
+        torch.Tensor: Post-processed segmentation mask tensor.
+    """
+    threshold = 0.5
+    device = output.device  # Get the device of the output tensor
+    processed_output = torch.where(output > threshold, torch.tensor(1, device=device), torch.tensor(0, device=device))
+    return processed_output
 
 ###########################################################
 
@@ -272,12 +287,14 @@ print("model built")
 model.to(DEVICE)
 # criterion = nn.CrossEntropyLoss()
 criterion = DiceLoss()
-optimizer = optim.SGD(model.parameters(), lr=0.00001, momentum=0.9)
+optimizer = optim.Adam(model.parameters(), lr=0.00005)
 
 # Training loop
 print("start training")
-for epoch in range(10): 
+for epoch in range(200): 
     model.train()
+    for param in model.parameters():
+        param.requires_grad_(True)
     running_loss = 0.0
     images_processed = 0
     for i, (images, masks) in enumerate(loader_train):
@@ -288,13 +305,10 @@ for epoch in range(10):
         # For binary segmentation, masks might need to be squeezed to remove the channel dimension if it's 1
         # masks = masks.squeeze(1)  
         images, masks = images.to(DEVICE), masks.to(DEVICE)
-
         optimizer.zero_grad()
         _, _, outputs = model(images, active_b1ff=active_b1ff, vis=True)  
 
-        outputs.requires_grad_()
-        masks.requires_grad_()
-        outputs = outputs.sigmoid()  # Ensure outputs are probabilities
+        outputs = torch.sigmoid(outputs) 
         loss = criterion.dice_loss(outputs, masks)
         loss = loss.mean()
         loss.backward()
@@ -306,7 +320,7 @@ for epoch in range(10):
         images_processed += batch_size  # Update the counter by the number of images in the current batch
 
         # Report the current average loss after every 500 images
-        if images_processed % 2500 == 0:
+        if images_processed % 1000 == 0:
             print(f"Processed {images_processed} images, Current Loss: {running_loss/images_processed:.4f}")
             # visualize_images_and_masks(outputs, masks)
             # Print shapes of images, masks, and outputs
@@ -320,9 +334,12 @@ for epoch in range(10):
             # print("Outputs:")
             # print(outputs[:,:,:4,:4])
 
+            # outputs  = post_process(outputs)
+            # visualize_images_and_masks(images, outputs, masks)
+
     print(f"Epoch {epoch+1}, Loss: {running_loss/images_processed}")
     val_loss = validate(model, loader_val, criterion, DEVICE)
-    visualize_images_and_masks(outputs, masks)
+    
 
 # save the model
 torch.save(model.state_dict(), os.path.join(save_path, 'best_model.pth'))
