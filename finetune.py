@@ -200,7 +200,7 @@ def visualize_images_and_masks(images, outputs, masks, num_images=1):
     # Display mask
     ax = axs[2]
     mask = masks.squeeze()  # Remove channel dim if it's there
-    ax.imshow(mask.cpu().detach().numpy(), cmap='gray', interpolation='nearest')
+    ax.imshow(mask.cpu().detach().numpy(), interpolation='nearest')
     ax.axis('off')
     ax.set_title('Ground Truth')
 
@@ -320,7 +320,7 @@ for epoch in range(200):
         images_processed += batch_size  # Update the counter by the number of images in the current batch
 
         # Report the current average loss after every 500 images
-        if images_processed % 1000 == 0:
+        if images_processed % 100 == 0:
             print(f"Processed {images_processed} images, Current Loss: {running_loss/images_processed:.4f}")
             # visualize_images_and_masks(outputs, masks)
             # Print shapes of images, masks, and outputs
@@ -334,8 +334,11 @@ for epoch in range(200):
             # print("Outputs:")
             # print(outputs[:,:,:4,:4])
 
-            # outputs  = post_process(outputs)
-            # visualize_images_and_masks(images, outputs, masks)
+            outputs  = post_process(outputs)
+            visualize_images_and_masks(images, outputs, masks)
+
+        if images_processed % 500 == 0:
+            visualize_segmentation(model, loader_val, DEVICE)
 
     print(f"Epoch {epoch+1}, Loss: {running_loss/images_processed}")
     val_loss = validate(model, loader_val, criterion, DEVICE)
