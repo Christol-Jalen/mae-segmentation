@@ -12,7 +12,7 @@ import matplotlib.pyplot as plt
 import data
 
 # Prepare the dataset
-data.prepare_dataset(ratio_train = 0.7)
+data.prepare_dataset(ratio_train = 0.7) # ratio_train can be chosen in [0, 0.9], as test set ratio is fixed at 10%
 
 # Set the environment variables for distributed training
 os.environ['MASTER_ADDR'] = 'localhost'  # or another appropriate address
@@ -48,7 +48,8 @@ if not os.path.exists(save_path):
 
 ## Data loader
 loader_train = H5ImageLoader(DATA_PATH+'/images_train.h5', minibatch_size, DATA_PATH+'/labels_train.h5')
-loader_val = H5ImageLoader(DATA_PATH+'/images_val.h5', minibatch_size, DATA_PATH+'/labels_val.h5')
+loader_val = H5ImageLoader(DATA_PATH+'/images_val.h5', 20, DATA_PATH+'/labels_val.h5')
+loader_test = H5ImageLoader(DATA_PATH+'/images_test.h5', 20, DATA_PATH+'/labels_test.h5')
 
 def main():
 
@@ -67,7 +68,7 @@ def main():
             param.requires_grad_(True)
         running_loss = 0.0
         images_processed = 0
-        for i, (images, masks) in enumerate(loader_train):
+        for images, masks in loader_train:
 
             images, masks = pre_process(images, masks)
             images = images.permute(0, 3, 1, 2)
@@ -88,21 +89,30 @@ def main():
             # Report the current average loss after every 1000 images
             if images_processed % 1000 == 0:
                 print(f"Processed {images_processed} images, Current Loss: {running_loss/images_processed:.4f}")
+                visualize_images_outputs_and_masks(images, outputs, masks)
+                #--------------temporary  code-------------
+                val_loss, val_accuracy = validate(model, loader_val, criterion, DEVICE)
+                print(f"Epoch {epoch+1}, Validation Loss: {val_loss}")
+                print(f"Epoch {epoch+1}, Validation Accuracy: {val_accuracy}")
+                #---------------------------------------
                 
-                
-
         print(f"Epoch {epoch+1}, Loss: {running_loss/images_processed}")
-        val_loss = validate(model, loader_val, criterion, DEVICE)
+        val_loss, val_accuracy = validate(model, loader_val, criterion, DEVICE)
         print(f"Epoch {epoch+1}, Validation Loss: {val_loss}")
+        print(f"Epoch {epoch+1}, Validation Accuracy: {val_accuracy}")
         # visualize_images_outputs_and_masks(images, outputs, masks)
-        
+
+    # Test the model after training
+    test_loss, test_accuracy = validate(model, loader_test, criterion, DEVICE)
+    print(f"Training finished.\n Test Loss: {test_loss}")
+    print(f"Test Accuracy: {test_accuracy}")  
 
     # Save the model
     torch.save(model.state_dict(), os.path.join(save_path, 'best_model.pth'))
     print("Model saved.")
 
     # After training, visualize segmentation output
-    visualize_validation(model, loader_val, DEVICE)
+    visualize_validation(model, loader_test, DEVICE)
 
 
 def build_spark(your_own_pretrained_ckpt: str):
@@ -149,6 +159,9 @@ def validate(model, loader_val, criterion, device):
     model.eval()  # Set model to evaluation mode
     val_loss = 0.0
     total_batches = 0
+    total_correct_pixels = 0
+    total_pixels = 0
+    
     with torch.no_grad():  # No gradients needed
         for images, masks in loader_val:
             images, masks = pre_process(images, masks)
@@ -156,14 +169,25 @@ def validate(model, loader_val, criterion, device):
             masks = masks.permute(0, 3, 1, 2).to(device)
             outputs = model(images, active_b1ff=None)
             outputs = outputs.sigmoid() 
+            
+            # Calculate loss
             loss = criterion.dice_loss(outputs, masks)
             loss = loss.mean()
             val_loss += loss.item()
+            
+            # Calculate accuracy
+            predicted_masks = (outputs > 0.5).float()  # Assuming threshold of 0.5 for binarization
+            correct_pixels = torch.sum(predicted_masks == masks).item()
+            total_correct_pixels += correct_pixels
+            total_pixels += torch.numel(masks)
+            
             total_batches += 1
+    
+    avg_loss = val_loss / total_batches 
+    accuracy = total_correct_pixels / total_pixels
+    
+    return avg_loss, accuracy
 
-    avg_val_loss = val_loss / total_batches 
-    print(f"Validation Loss: {avg_val_loss}")
-    return avg_val_loss
 
 def visualize_validation(model, loader, device):
     model.eval()
@@ -176,11 +200,11 @@ def visualize_validation(model, loader, device):
     preds = preds.sigmoid().cpu()
 
     # Plotting
-    visualize_images_outputs_and_masks(images, preds, masks)
+    # visualize_images_outputs_and_masks(images, preds, masks)  # TO DO: Fit this function to batch-size > 1
 
     
 def visualize_images_outputs_and_masks(images, outputs, masks, num_images=1):
-  
+    # TO DO: Fit this function to batch-size > 1
     images = images.permute(0, 2, 3, 1)  # Change from BxCxHxW to BxHxWxC for visualization
     _, axs = plt.subplots(3, num_images, figsize=(num_images * 4, 8))  # Set up the subplot grid
 
