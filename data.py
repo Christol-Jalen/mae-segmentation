@@ -12,77 +12,80 @@ from PIL import Image
 import numpy as np
 import h5py
 
+def prepare_dataset(ratio_train = 0.7):
+    
+    # Create a 'data' folder to store the downloaded data
+    DATA_PATH = './data'
+    if not os.path.exists(DATA_PATH):
+        os.makedirs(DATA_PATH)
+    else:
+        print("DATA_PATH already exists. Continuing to check the HDF5 files.")
 
-DATA_PATH = './data'
+    # Check if HDF5 files already exist in the 'data' folder
+    existing_h5_files = [file for file in os.listdir(DATA_PATH) if file.endswith('.h5')]
 
-## download
-filenames = ['images.tar.gz', 'annotations.tar.gz']
-url_base = 'https://www.robots.ox.ac.uk/~vgg/data/pets/data/'
+    if existing_h5_files:
+        print("HDF5 files already exist in the 'data' folder. Continuing to fine-tuning.")
+    else:
+        print("HDF5 files do not exist in the 'data' folder. Downloading and converting the data.")
 
-if os.path.exists(DATA_PATH):
-    shutil.rmtree(DATA_PATH)
-os.makedirs(DATA_PATH)
+        ## download dataset
+        filenames = ['images.tar.gz', 'annotations.tar.gz']
+        url_base = 'https://www.robots.ox.ac.uk/~vgg/data/pets/data/'
 
-print('Downloading and extracting data...')
-for temp_file in filenames:
-    url = url_base + temp_file
-    print(url + ' ...')
-    r = requests.get(url,allow_redirects=True)
-    _ = open(temp_file,'wb').write(r.content)
-    with tarfile.open(temp_file) as tar_obj:
-        tar_obj.extractall()
-        tar_obj.close()
-    os.remove(temp_file)
+        for temp_file in filenames:
+            url = url_base + temp_file
+            print(url + ' ...')
+            r = requests.get(url,allow_redirects=True)
+            _ = open(temp_file,'wb').write(r.content)
+            with tarfile.open(temp_file) as tar_obj:
+                tar_obj.extractall()
+                tar_obj.close()
+            os.remove(temp_file)
 
+        ## spliting and converting
+        img_dir = 'images'
+        seg_dir = 'annotations/trimaps'
+        im_size = (224,224)
+        img_h5s, seg_h5s = [], []
+        for s in ["train", "val", "test"]:
+            img_h5s.append(h5py.File(os.path.join(DATA_PATH,"images_{:s}.h5".format(s)), "w"))
+            seg_h5s.append(h5py.File(os.path.join(DATA_PATH,"labels_{:s}.h5".format(s)), "w"))
 
-## spliting and converting
-img_dir = 'images'
-seg_dir = 'annotations/trimaps'
-#----- options -----
-im_size = (224,224)
-ratio_val = 0.1
-ratio_test = 0.2
-#-------------------
-img_h5s, seg_h5s = [], []
-for s in ["train", "val", "test"]:
-    img_h5s.append(h5py.File(os.path.join(DATA_PATH,"images_{:s}.h5".format(s)), "w"))
-    seg_h5s.append(h5py.File(os.path.join(DATA_PATH,"labels_{:s}.h5".format(s)), "w"))
+        img_filenames = [f for f in os.listdir(img_dir) if f.endswith('.jpg')]
+        num_data = len(img_filenames)
+        num_train = int(num_data * ratio_train)
+        num_val = int(num_data * (1-ratio_train) / 2)
+        num_test = num_data - num_train - num_val
+        print("Dataset Loaded: num_train: %d, num_val: %d, num_test: %d" % (num_train, num_val, num_test))
 
-img_filenames = [f for f in os.listdir(img_dir) if f.endswith('.jpg')]
-num_data = len(img_filenames)
-num_val = int(num_data * ratio_val)
-num_test = int(num_data * ratio_test)
-num_train = num_data - num_val - num_test
+        random.seed(90)
+        random.shuffle(img_filenames)
 
-print("Extracting data into %d-%d-%d for train-val-test (%0.2f-%0.2f-%0.2f)..." % (num_train,num_val,num_test, 1-ratio_val-ratio_test,ratio_val,ratio_test))
+        # write all images/labels to h5 file
+        for idx, im_file in enumerate(img_filenames):
 
-random.seed(90)
-random.shuffle(img_filenames)
+            if idx < num_train:  # train
+                ids = 0
+            elif idx < (num_train + num_val):  # val
+                ids = 1
+            else:  # test
+                ids = 2
 
-# write all images/labels to h5 file
-for idx, im_file in enumerate(img_filenames):
+            with Image.open(os.path.join(img_dir,im_file)) as img:
+                img = np.array(img.convert('RGB').resize(im_size).getdata(),dtype='uint8').reshape(im_size[0],im_size[1],3)
+                img_h5s[ids].create_dataset("{:06d}".format(idx), data=img)
+            with Image.open(os.path.join(seg_dir,im_file.split('.')[0]+'.png')) as seg:
+                seg = np.array(seg.resize(im_size).getdata(),dtype='uint8').reshape(im_size[0],im_size[1])
+                seg_h5s[ids].create_dataset("{:06d}".format(idx), data=seg)
 
-    if idx < num_train:  # train
-        ids = 0
-    elif idx < (num_train + num_val):  # val
-        ids = 1
-    else:  # test
-        ids = 2
+        for ids in range(len(img_h5s)):
+            img_h5s[ids].flush()
+            img_h5s[ids].close()
+            seg_h5s[ids].flush()
+            seg_h5s[ids].close()
 
-    with Image.open(os.path.join(img_dir,im_file)) as img:
-        img = np.array(img.convert('RGB').resize(im_size).getdata(),dtype='uint8').reshape(im_size[0],im_size[1],3)
-        img_h5s[ids].create_dataset("{:06d}".format(idx), data=img)
-    with Image.open(os.path.join(seg_dir,im_file.split('.')[0]+'.png')) as seg:
-        seg = np.array(seg.resize(im_size).getdata(),dtype='uint8').reshape(im_size[0],im_size[1])
-        seg_h5s[ids].create_dataset("{:06d}".format(idx), data=seg)
+        shutil.rmtree(img_dir)
+        shutil.rmtree(seg_dir.split('/')[0]) #remove entire annatations folder
 
-for ids in range(len(img_h5s)):
-    img_h5s[ids].flush()
-    img_h5s[ids].close()
-    seg_h5s[ids].flush()
-    seg_h5s[ids].close()
-
-shutil.rmtree(img_dir)
-shutil.rmtree(seg_dir.split('/')[0]) #remove entire annatations folder
-
-print('Data saved in %s.' % os.path.abspath(DATA_PATH))
+        print('Data saved in %s.' % os.path.abspath(DATA_PATH))

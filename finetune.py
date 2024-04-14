@@ -9,7 +9,10 @@ from spark import SparK
 from loss import DiceLoss
 import torch.distributed as dist
 import matplotlib.pyplot as plt
+import data
 
+# Prepare the dataset
+data.prepare_dataset()
 
 # Set the environment variables for distributed training
 os.environ['MASTER_ADDR'] = 'localhost'  # or another appropriate address
@@ -71,7 +74,6 @@ def main():
             images, masks = images.to(DEVICE), masks.to(DEVICE)
             optimizer.zero_grad()
             outputs = model(images, active_b1ff=None)  
-
             outputs = torch.sigmoid(outputs) 
             loss = criterion.dice_loss(outputs, masks)
             loss = loss.mean()
@@ -79,13 +81,14 @@ def main():
             optimizer.step()
 
             running_loss += loss.item()
-
             batch_size = images.size(0)
             images_processed += batch_size
 
             # Report the current average loss after every 500 images
-            if images_processed % 300 == 0:
+            if images_processed % 200 == 0:
                 print(f"Processed {images_processed} images, Current Loss: {running_loss/images_processed:.4f}")
+                #val_loss = validate(model, loader_val, criterion, DEVICE)
+                #print(f"Processed {images_processed} images, Current  Val Loss: {val_loss:.4f}")
                 visualize_images_outputs_and_masks(images, outputs, masks)
                 
 
@@ -144,7 +147,7 @@ def pre_process(images, labels):
 def validate(model, loader_val, criterion, device):
     model.eval()  # Set model to evaluation mode
     val_loss = 0.0
-    images_processed = 0
+    total_batches = 0
     with torch.no_grad():  # No gradients needed
         for images, masks in loader_val:
             images, masks = pre_process(images, masks)
@@ -155,10 +158,9 @@ def validate(model, loader_val, criterion, device):
             loss = criterion.dice_loss(outputs, masks)
             loss = loss.mean()
             val_loss += loss.item()
-            batch_size = images.size(0)
-            images_processed += batch_size
+            total_batches += 1
 
-    avg_val_loss = 20 * val_loss / images_processed 
+    avg_val_loss = val_loss / total_batches 
     print(f"Validation Loss: {avg_val_loss}")
     return avg_val_loss
 
