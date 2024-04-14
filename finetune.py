@@ -12,7 +12,7 @@ import matplotlib.pyplot as plt
 import data
 
 # Prepare the dataset
-data.prepare_dataset()
+data.prepare_dataset(ratio_train = 0.7)
 
 # Set the environment variables for distributed training
 os.environ['MASTER_ADDR'] = 'localhost'  # or another appropriate address
@@ -38,7 +38,7 @@ DATA_PATH = './data'
 ## Training parameters
 minibatch_size = 1
 learning_rate = 1e-4
-num_epochs = 200
+num_epochs = 20
 criterion = DiceLoss()
 save_path = "results_pt"
 
@@ -48,11 +48,12 @@ if not os.path.exists(save_path):
 
 ## Data loader
 loader_train = H5ImageLoader(DATA_PATH+'/images_train.h5', minibatch_size, DATA_PATH+'/labels_train.h5')
-loader_val = H5ImageLoader(DATA_PATH+'/images_val.h5', 20, DATA_PATH+'/labels_val.h5')
+loader_val = H5ImageLoader(DATA_PATH+'/images_val.h5', minibatch_size, DATA_PATH+'/labels_val.h5')
 
 def main():
 
-    model = build_spark('res50_withdecoder_1kpretrained_spark_style.pth')
+    # Build the model
+    model = build_spark('res50_withdecoder_1kpretrained_spark_style.pth') # Replace with the name of your own pretrained model
     print("model built")
 
     model.to(DEVICE)
@@ -67,7 +68,7 @@ def main():
         running_loss = 0.0
         images_processed = 0
         for i, (images, masks) in enumerate(loader_train):
-            # Pre-process inputs and masks
+
             images, masks = pre_process(images, masks)
             images = images.permute(0, 3, 1, 2)
             masks = masks.permute(0, 3, 1, 2)
@@ -84,16 +85,16 @@ def main():
             batch_size = images.size(0)
             images_processed += batch_size
 
-            # Report the current average loss after every 500 images
-            if images_processed % 200 == 0:
+            # Report the current average loss after every 1000 images
+            if images_processed % 1000 == 0:
                 print(f"Processed {images_processed} images, Current Loss: {running_loss/images_processed:.4f}")
-                #val_loss = validate(model, loader_val, criterion, DEVICE)
-                #print(f"Processed {images_processed} images, Current  Val Loss: {val_loss:.4f}")
-                visualize_images_outputs_and_masks(images, outputs, masks)
+                
                 
 
         print(f"Epoch {epoch+1}, Loss: {running_loss/images_processed}")
         val_loss = validate(model, loader_val, criterion, DEVICE)
+        print(f"Epoch {epoch+1}, Validation Loss: {val_loss}")
+        # visualize_images_outputs_and_masks(images, outputs, masks)
         
 
     # Save the model
