@@ -79,14 +79,17 @@ class SparK(nn.Module):
         self.vis_active = self.vis_active_ex = self.vis_inp = self.vis_inp_mask = ...
     
     def mask(self, B: int, device, generator=None):
+        '''
+        While this function originally generate a random mask map, it is modified to return a all-ones mask map for fine-tuning.
+        '''
         h, w = self.fmap_h, self.fmap_w
         idx = torch.rand(B, h * w, generator=generator).argsort(dim=1)
         idx = idx[:, :self.len_keep].to(device)  # (B, len_keep)
-        return torch.zeros(B, h * w, dtype=torch.bool, device=device).scatter_(dim=1, index=idx, value=True).view(B, 1, h, w)
+        return torch.ones(B, h * w, dtype=torch.bool, device=device).view(B, 1, h, w)
     
-    def forward(self, inp_bchw: torch.Tensor, active_b1ff=None, vis=False):
+    def forward(self, inp_bchw: torch.Tensor, active_b1ff: torch.BoolTensor):
         # step1. Mask
-        if active_b1ff is None:     # rand mask
+        if active_b1ff is None:    
             active_b1ff: torch.BoolTensor = self.mask(inp_bchw.shape[0], inp_bchw.device)  # (B, 1, f, f)
         encoder._cur_active = active_b1ff    # (B, 1, f, f)
         active_b1hw = active_b1ff.repeat_interleave(self.downsample_raito, 2).repeat_interleave(self.downsample_raito, 3)  # (B, 1, H, W)
@@ -110,49 +113,10 @@ class SparK(nn.Module):
         
         # step4. Decode and reconstruct
         rec_bchw = self.dense_decoder(to_dec)
-        #inp, rec = self.patchify(inp_bchw), self.patchify(rec_bchw)   # inp and rec: (B, L = f*f, N = C*downsample_raito**2)
-
-        ##############################################################################
-        # # Normalize input here, assuming input needs to match the output channels
-        # if inp_bchw.size(1) != rec_bchw.size(1):  # Check if channel sizes differ
-        #     inp = inp.mean(dim=2, keepdim=True)  # Reduce input channels by averaging to fit the 1-channel ground truth
-        ##############################################################################
-
-        #mean = inp.mean(dim=-1, keepdim=True)
-        #var = (inp.var(dim=-1, keepdim=True) + 1e-6) ** .5
-        #inp = (inp - mean) / var
-
-
-        #l2_loss = ((rec - inp) ** 2).mean(dim=2, keepdim=False)    # (B, L, C) ==mean==> (B, L)
-        
-        non_active = active_b1ff.logical_not().int().view(active_b1ff.shape[0], -1)  # (B, 1, f, f) => (B, L)
-        #recon_loss = l2_loss.mul_(non_active).sum() / (non_active.sum() + 1e-8)  # loss only on masked (non-active) patches
-        
-        if vis:
-            masked_bchw = inp_bchw * active_b1hw
-            #rec_bchw = self.unpatchify(rec * var + mean)
-            rec_or_inp = torch.where(active_b1hw, inp_bchw, rec_bchw)
-            return inp_bchw, masked_bchw, rec_bchw
-        else:
-            return None
+  
+        return rec_bchw
     
-    def patchify(self, bchw):
-        p = self.downsample_raito
-        h, w = self.fmap_h, self.fmap_w
-        B, C = bchw.shape[:2]
-        bchw = bchw.reshape(shape=(B, C, h, p, w, p))
-        bchw = torch.einsum('bchpwq->bhwpqc', bchw)
-        bln = bchw.reshape(shape=(B, h * w, C * p ** 2))  # (B, f*f, 3*downsample_raito**2)
-        return bln
-    
-    def unpatchify(self, bln):
-        p = self.downsample_raito
-        h, w = self.fmap_h, self.fmap_w
-        B, C = bln.shape[0], bln.shape[-1] // p ** 2
-        bln = bln.reshape(shape=(B, h, w, p, p, C))
-        bln = torch.einsum('bhwpqc->bchpwq', bln)
-        bchw = bln.reshape(shape=(B, C, h * p, w * p))
-        return bchw
+
     
     def __repr__(self):
         return (
