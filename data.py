@@ -12,7 +12,7 @@ from PIL import Image
 import numpy as np
 import h5py
 
-def prepare_dataset(ratio_train = 0.7):
+def prepare_dataset(ratio_train):
     
     # Create a 'data' folder to store the downloaded data
     DATA_PATH = './data'
@@ -55,8 +55,8 @@ def prepare_dataset(ratio_train = 0.7):
         img_filenames = [f for f in os.listdir(img_dir) if f.endswith('.jpg')]
         num_data = len(img_filenames)
         num_train = int(num_data * ratio_train)
-        num_val = int(num_data * (1-ratio_train) / 2)
-        num_test = num_data - num_train - num_val
+        num_test = 0.1
+        num_val = num_data - num_train - num_test
         print("Dataset Loaded: num_train: %d, num_val: %d, num_test: %d" % (num_train, num_val, num_test))
 
         random.seed(90)
