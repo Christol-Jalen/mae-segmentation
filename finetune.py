@@ -55,7 +55,7 @@ def main():
 
     # Build the model
     model = build_spark('res50_withdecoder_1kpretrained_spark_style.pth') # Replace with the name of your own pretrained model
-    # model = build_spark('50_epoch.pth')
+    # model = build_spark('res50_epoch90.pth')
     print("model built")
 
     model.to(DEVICE)
@@ -121,14 +121,11 @@ def build_spark(your_own_pretrained_ckpt: str):
 
     # Build a SparK model
     #print(pretrained_state.keys())
-    config = pretrained_state['config']
     enc: SparseEncoder = build_sparse_encoder(model_name, input_size=input_size)
     spark = SparK(
         sparse_encoder=enc, 
-        dense_decoder=LightDecoder(enc.downsample_raito, sbn=False),
-        mask_ratio=config['mask_ratio'], 
-        densify_norm=config['densify_norm_str'], 
-        sbn=config['sbn'],).to(DEVICE)
+        dense_decoder=LightDecoder(enc.downsample_raito, sbn=False)
+        ).to(DEVICE)
     spark.eval(), [p.requires_grad_(False) for p in spark.parameters()]
 
     # Adjusting loading to handle incompatible keys
