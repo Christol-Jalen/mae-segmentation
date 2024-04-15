@@ -12,7 +12,7 @@ import matplotlib.pyplot as plt
 import data
 
 # Prepare the dataset
-data.prepare_dataset(ratio_train = 0.7) # ratio_train can be chosen in [0, 0.9], as test set ratio is fixed at 10%
+data.prepare_dataset(ratio_train = 0.7) # ratio_train can be chosen in [0, 0.85], as test set ratio is fixed at 10%
 
 # Set the environment variables for distributed training
 os.environ['MASTER_ADDR'] = 'localhost'  # or another appropriate address
@@ -36,9 +36,9 @@ DATA_PATH = './data'
 
 
 ## Training parameters
-minibatch_size = 1
+minibatch_size = 4
 learning_rate = 1e-4
-num_epochs = 20
+num_epochs = 2
 criterion = DiceLoss()
 save_path = "results_pt"
 
@@ -55,6 +55,7 @@ def main():
 
     # Build the model
     model = build_spark('res50_withdecoder_1kpretrained_spark_style.pth') # Replace with the name of your own pretrained model
+    # model = build_spark('50_epoch.pth')
     print("model built")
 
     model.to(DEVICE)
@@ -67,7 +68,7 @@ def main():
         for param in model.parameters():
             param.requires_grad_(True)
         running_loss = 0.0
-        images_processed = 0
+        batches_processed = 0
         for images, masks in loader_train:
 
             images, masks = pre_process(images, masks)
@@ -83,36 +84,33 @@ def main():
             optimizer.step()
 
             running_loss += loss.item()
-            batch_size = images.size(0)
-            images_processed += batch_size
+            batches_processed += 1
 
-            # Report the current average loss after every 1000 images
-            if images_processed % 1000 == 0:
-                print(f"Processed {images_processed} images, Current Loss: {running_loss/images_processed:.4f}")
-                visualize_images_outputs_and_masks(images, outputs, masks)
-                #--------------temporary  code-------------
-                val_loss, val_accuracy = validate(model, loader_val, criterion, DEVICE)
-                print(f"Epoch {epoch+1}, Validation Loss: {val_loss}")
-                print(f"Epoch {epoch+1}, Validation Accuracy: {val_accuracy}")
-                #---------------------------------------
+            # Report the current average loss after every 500 images
+            # if batches_processed % 500 == 0:
+            #     print(f"Processed {batches_processed} batches, Current Loss: {running_loss/batches_processed:.4f}")
+            #     val_loss, val_accuracy = validate_and_test(model, loader_val, criterion, DEVICE, vis=False)
+            #     print(f"Current Validation Loss: {val_loss}")
+            #     print(f"Current Validation Accuracy: {val_accuracy}%")
                 
-        print(f"Epoch {epoch+1}, Loss: {running_loss/images_processed}")
-        val_loss, val_accuracy = validate(model, loader_val, criterion, DEVICE)
-        print(f"Epoch {epoch+1}, Validation Loss: {val_loss}")
-        print(f"Epoch {epoch+1}, Validation Accuracy: {val_accuracy}")
+        print(f"Epoch {epoch+1}, Loss: {running_loss/batches_processed}")
+        val_loss, val_accuracy = validate_and_test(model, loader_val, criterion, DEVICE, vis=True)
+        # print(f"Epoch {epoch+1}, Validation Loss: {val_loss}")
+        print(f"Epoch {epoch+1}, Validation Accuracy: {val_accuracy}%")
         # visualize_images_outputs_and_masks(images, outputs, masks)
 
     # Test the model after training
-    test_loss, test_accuracy = validate(model, loader_test, criterion, DEVICE)
-    print(f"Training finished.\n Test Loss: {test_loss}")
+    test_loss, test_accuracy = validate_and_test(model, loader_test, criterion, DEVICE, vis=True)
+    print(f"Training finished.\nTest Loss: {test_loss}")
     print(f"Test Accuracy: {test_accuracy}")  
+
+    # After training, visualize segmentation output
+    #visualize_testing(model, loader_test, DEVICE)
 
     # Save the model
     torch.save(model.state_dict(), os.path.join(save_path, 'best_model.pth'))
     print("Model saved.")
 
-    # After training, visualize segmentation output
-    visualize_validation(model, loader_test, DEVICE)
 
 
 def build_spark(your_own_pretrained_ckpt: str):
@@ -122,6 +120,7 @@ def build_spark(your_own_pretrained_ckpt: str):
     print(f"[in function `build_spark`] your ckpt `{your_own_pretrained_ckpt}` loaded")
 
     # Build a SparK model
+    #print(pretrained_state.keys())
     config = pretrained_state['config']
     enc: SparseEncoder = build_sparse_encoder(model_name, input_size=input_size)
     spark = SparK(
@@ -155,7 +154,7 @@ def pre_process(images, labels):
     labels = torch.stack([torch.tensor(lbl).unsqueeze(-1).float() for lbl in labels])
     return images, labels
 
-def validate(model, loader_val, criterion, device):
+def validate_and_test(model, loader, criterion, device, vis):
     model.eval()  # Set model to evaluation mode
     val_loss = 0.0
     total_batches = 0
@@ -163,7 +162,7 @@ def validate(model, loader_val, criterion, device):
     total_pixels = 0
     
     with torch.no_grad():  # No gradients needed
-        for images, masks in loader_val:
+        for images, masks in loader:
             images, masks = pre_process(images, masks)
             images = images.permute(0, 3, 1, 2).to(device)
             masks = masks.permute(0, 3, 1, 2).to(device)
@@ -176,7 +175,7 @@ def validate(model, loader_val, criterion, device):
             val_loss += loss.item()
             
             # Calculate accuracy
-            predicted_masks = (outputs > 0.5).float()  # Assuming threshold of 0.5 for binarization
+            predicted_masks = (outputs > 0.5).float()  # threshold of 0.5 for binarization
             correct_pixels = torch.sum(predicted_masks == masks).item()
             total_correct_pixels += correct_pixels
             total_pixels += torch.numel(masks)
@@ -184,12 +183,16 @@ def validate(model, loader_val, criterion, device):
             total_batches += 1
     
     avg_loss = val_loss / total_batches 
-    accuracy = total_correct_pixels / total_pixels
+    accuracy = total_correct_pixels / total_pixels * 100
+    model.train() # Put the model back to train mode
+
+    if vis:
+        visualize_images_outputs_and_masks(images, outputs, masks)
     
     return avg_loss, accuracy
 
 
-def visualize_validation(model, loader, device):
+def visualize_testing(model, loader, device):
     model.eval()
     images, masks = next(iter(loader))  # Get a batch from the loader
     images, _ = pre_process(images, masks)
@@ -200,44 +203,50 @@ def visualize_validation(model, loader, device):
     preds = preds.sigmoid().cpu()
 
     # Plotting
-    # visualize_images_outputs_and_masks(images, preds, masks)  # TO DO: Fit this function to batch-size > 1
+    visualize_images_outputs_and_masks(images, preds, masks)
 
     
-def visualize_images_outputs_and_masks(images, outputs, masks, num_images=1):
-    # TO DO: Fit this function to batch-size > 1
-    images = images.permute(0, 2, 3, 1)  # Change from BxCxHxW to BxHxWxC for visualization
-    _, axs = plt.subplots(3, num_images, figsize=(num_images * 4, 8))  # Set up the subplot grid
+def visualize_images_outputs_and_masks(images, outputs, masks, num_images=minibatch_size):
+
+    # Post-process outputs
+    outputs = post_process(outputs)
+    # Ensure images, outputs, and masks are tensor type and check dimensions
+    if not (images.ndim == 4 and outputs.ndim in [3, 4] and masks.ndim in [3, 4]):
+        raise ValueError("Invalid input dimensions")
+
+    # permute images from BxCxHxW to BxHxWxC for matplotlib
+    images = images.permute(0, 2, 3, 1).cpu().detach().numpy()
+
+    # Prepare outputs and masks (handle both cases where outputs and masks might have an extra channel dimension)
+    outputs = outputs.squeeze(1).cpu().detach().numpy() if outputs.ndim == 4 else outputs.cpu().detach().numpy()
+    masks = masks.squeeze(1).cpu().detach().numpy() if masks.ndim == 4 else masks.cpu().detach().numpy()
+
+    # Normalize images if not in [0, 1]
+    images = (images - images.min(axis=(1, 2, 3), keepdims=True)) / \
+             (images.max(axis=(1, 2, 3), keepdims=True) - images.min(axis=(1, 2, 3), keepdims=True))
+
+    _, axs = plt.subplots(3, num_images, figsize=(num_images * 4, 12))
+    if num_images == 1:
+        axs = axs.reshape(3, 1)  # Make axs 2D in case of single image for uniformity
 
     for i in range(num_images):
-        img = images[i].cpu().detach().numpy()
-        if img.min() < 0 or img.max() > 1:
-            # Normalize to [0, 1]
-            img = (img - img.min()) / (img.max() - img.min())
-
         # Display image
-        ax = axs[0]
-        ax.imshow(img, interpolation='nearest')
-        ax.axis('off')
-        ax.set_title('Image')
-        ax.set_title('Input')
+        axs[0, i].imshow(images[i], interpolation='nearest')
+        axs[0, i].axis('off')
+        axs[0, i].set_title('Input Image')
 
         # Display output
-        outputs  = post_process(outputs)
-        ax = axs[1]
-        out = outputs.squeeze()  # Remove channel dim if it's there
-        ax.imshow(out.cpu().detach().numpy(), interpolation='nearest')
-        ax.axis('off')
-        ax.set_title('Prediction')
+        axs[1, i].imshow(outputs[i], cmap='gray', interpolation='nearest')
+        axs[1, i].axis('off')
+        axs[1, i].set_title('Prediction')
 
         # Display mask
-        ax = axs[2]
-        mask = masks.squeeze()  # Remove channel dim if it's there
-        ax.imshow(mask.cpu().detach().numpy(), interpolation='nearest')
-        ax.axis('off')
-        ax.set_title('Ground Truth')
+        axs[2, i].imshow(masks[i], cmap='gray', interpolation='nearest')
+        axs[2, i].axis('off')
+        axs[2, i].set_title('Ground Truth')
 
-        plt.tight_layout()
-        plt.show()
+    plt.tight_layout()
+    plt.show()
 
 
 def post_process(output):
