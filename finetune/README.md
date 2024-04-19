@@ -18,6 +18,10 @@ $ pip install -r requirements.txt
 3. Download pretrained model from this [link](https://drive.google.com/file/d/1STt3w3e5q9eCPZa8VzcJj1zG6p3jLeSF/view?usp=share_link
    ) save the pretrained model to the current directory.
 
+   0 epoch: [link]https://drive.google.com/drive/folders/14XH8F7En_C-8zGiy2zob3VR-WLVUT1sy
+   
+   90 epoch: [link]https://drive.google.com/file/d/1Ry_hsxv9EeqYPi43ODqEAVn4PjXLpGHP/view?usp=drive_link
+
 4. Start fine-tuning on Oxford-IIIT Pet Dataset (dataset will be automatically downloaded if not exist):
 
 ```shell script
