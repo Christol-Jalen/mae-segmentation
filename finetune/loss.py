@@ -17,7 +17,7 @@ class DiceLoss(nn.Module):
         """
         Compute the Dice loss, which is -1 times the Dice score.
         """
-        return -self.dice_score(ps, ts) 
+        return 1 - self.dice_score(ps, ts) 
 
     def dice_binary(self, ps, ts):
         """

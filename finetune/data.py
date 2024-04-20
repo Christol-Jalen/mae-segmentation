@@ -12,7 +12,7 @@ from PIL import Image
 import numpy as np
 import h5py
 
-def prepare_dataset(ratio_train):
+def prepare_dataset(ratio_train, split_data=False):
     
     # Create a 'data' folder to store the downloaded data
     DATA_PATH = './data'
@@ -25,7 +25,7 @@ def prepare_dataset(ratio_train):
     existing_h5_files = [file for file in os.listdir(DATA_PATH) if file.endswith('.h5')]
 
     if existing_h5_files:
-        print("HDF5 files already exist in the 'data' folder. Performing data splite.")
+        print("HDF5 files already exist in the 'data' folder.")
     else:
         print("HDF5 files do not exist in the 'data' folder. Downloading and converting the data.")
 
@@ -44,50 +44,54 @@ def prepare_dataset(ratio_train):
                 tar_obj.extractall(DATA_PATH)
             os.remove(temp_file_path)
 
+    if split_data:
 
-    ## spliting and converting
-    img_dir = os.path.join(DATA_PATH, 'images')
-    seg_dir = os.path.join(DATA_PATH, 'annotations', 'trimaps')
-    im_size = (224,224)
-    img_h5s, seg_h5s = [], []
-    for s in ["train", "val", "test"]:
-        img_h5s.append(h5py.File(os.path.join(DATA_PATH,"images_{:s}.h5".format(s)), "w"))
-        seg_h5s.append(h5py.File(os.path.join(DATA_PATH,"labels_{:s}.h5".format(s)), "w"))
+        ## spliting and converting
+        print("Splitting and converting the data.")
+        img_dir = os.path.join(DATA_PATH, 'images')
+        seg_dir = os.path.join(DATA_PATH, 'annotations', 'trimaps')
+        im_size = (224,224)
+        img_h5s, seg_h5s = [], []
+        for s in ["train", "val", "test"]:
+            img_h5s.append(h5py.File(os.path.join(DATA_PATH,"images_{:s}.h5".format(s)), "w"))
+            seg_h5s.append(h5py.File(os.path.join(DATA_PATH,"labels_{:s}.h5".format(s)), "w"))
 
-    img_filenames = [f for f in os.listdir(img_dir) if f.endswith('.jpg')]
-    num_data = len(img_filenames)
-    num_train = int(num_data * ratio_train)
-    num_test = int(num_data * 0.1) 
-    num_val = num_data - num_train - num_test
+        img_filenames = [f for f in os.listdir(img_dir) if f.endswith('.jpg')]
+        num_data = len(img_filenames)
+        num_train = int(num_data * ratio_train)
+        num_test = int(num_data * 0.1) 
+        num_val = num_data - num_train - num_test
 
 
-    random.seed(90)
-    random.shuffle(img_filenames)
+        random.seed(90)
+        random.shuffle(img_filenames)
 
-    # write all images/labels to h5 file
-    for idx, im_file in enumerate(img_filenames):
+        # write all images/labels to h5 file
+        for idx, im_file in enumerate(img_filenames):
 
-        if idx < num_train:  # train
-            ids = 0
-        elif idx < (num_train + num_val):  # val
-            ids = 1
-        else:  # test
-            ids = 2
+            if idx < num_train:  # train
+                ids = 0
+            elif idx < (num_train + num_val):  # val
+                ids = 1
+            else:  # test
+                ids = 2
 
-        with Image.open(os.path.join(img_dir,im_file)) as img:
-            img = np.array(img.convert('RGB').resize(im_size).getdata(),dtype='uint8').reshape(im_size[0],im_size[1],3)
-            img_h5s[ids].create_dataset("{:06d}".format(idx), data=img)
-        with Image.open(os.path.join(seg_dir,im_file.split('.')[0]+'.png')) as seg:
-            seg = np.array(seg.resize(im_size).getdata(),dtype='uint8').reshape(im_size[0],im_size[1])
-            seg_h5s[ids].create_dataset("{:06d}".format(idx), data=seg)
+            with Image.open(os.path.join(img_dir,im_file)) as img:
+                img = np.array(img.convert('RGB').resize(im_size).getdata(),dtype='uint8').reshape(im_size[0],im_size[1],3)
+                img_h5s[ids].create_dataset("{:06d}".format(idx), data=img)
+            with Image.open(os.path.join(seg_dir,im_file.split('.')[0]+'.png')) as seg:
+                seg = np.array(seg.resize(im_size).getdata(),dtype='uint8').reshape(im_size[0],im_size[1])
+                seg_h5s[ids].create_dataset("{:06d}".format(idx), data=seg)
 
-    for ids in range(len(img_h5s)):
-        img_h5s[ids].flush()
-        img_h5s[ids].close()
-        seg_h5s[ids].flush()
-        seg_h5s[ids].close()
+        for ids in range(len(img_h5s)):
+            img_h5s[ids].flush()
+            img_h5s[ids].close()
+            seg_h5s[ids].flush()
+            seg_h5s[ids].close()
 
-    # shutil.rmtree(img_dir)
-    # shutil.rmtree(seg_dir.split('/')[0]) #remove entire annatations folder
-    print("Data splited, saved in %s. Continuing to fine-tuning." % os.path.abspath(DATA_PATH))
-    # print('Data saved in %s.' % os.path.abspath(DATA_PATH))
+        # shutil.rmtree(img_dir)
+        # shutil.rmtree(seg_dir.split('/')[0]) #remove entire annatations folder
+        print("Data splited, saved in %s. Continuing to fine-tuning." % os.path.abspath(DATA_PATH))
+        # print('Data saved in %s.' % os.path.abspath(DATA_PATH))
+    else:
+        print("Data not splited. Continuing to fine-tuning.")

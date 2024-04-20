@@ -12,7 +12,7 @@ import matplotlib.pyplot as plt
 import data
 
 # Prepare the dataset
-data.prepare_dataset(ratio_train = 0.7) # ratio_train can be chosen in [0, 0.85], as test set ratio is fixed at 10%
+data.prepare_dataset(ratio_train = 0.7, split_data = True) # ratio_train can be chosen in [0, 0.85], as test set ratio is fixed at 10%
 
 # Set the environment variables for distributed training
 os.environ['MASTER_ADDR'] = 'localhost'  # or another appropriate address
@@ -36,7 +36,7 @@ DATA_PATH = './data'
 
 
 ## Training parameters
-minibatch_size = 4
+minibatch_size = 1
 learning_rate = 1e-4
 num_epochs = 2
 criterion = DiceLoss()
@@ -55,8 +55,7 @@ print("Dataset Loaded: num_train: %d, num_val: %d, num_test: %d" % (loader_train
 def main():
 
     # Build the model
-    # model = build_spark('models/res50_withdecoder_1kpretrained_spark_style.pth') # Replace with the name of your own pretrained model
-    model = build_spark('models/resnet50_100pretrained_timm_style_90.pth')
+    model = build_spark('resnet50_90epochs_imagenet100pretrained.pth')
     print("model built")
 
     model.to(DEVICE)
