@@ -4,7 +4,7 @@ from loader import H5ImageLoader
 import os
 from decoder import LightDecoder
 from encoder import SparseEncoder
-from models import build_sparse_encoder
+from network import build_sparse_encoder
 from spark import SparK
 from loss import DiceLoss
 import torch.distributed as dist
@@ -40,29 +40,30 @@ minibatch_size = 4
 learning_rate = 1e-4
 num_epochs = 2
 criterion = DiceLoss()
-save_path = "results_pt"
+model_path = "models"
 
-if not os.path.exists(save_path):
-    os.makedirs(save_path)
+# if not os.path.exists(save_path):
+#     os.makedirs(save_path)
 
 
 ## Data loader
 loader_train = H5ImageLoader(DATA_PATH+'/images_train.h5', minibatch_size, DATA_PATH+'/labels_train.h5')
 loader_val = H5ImageLoader(DATA_PATH+'/images_val.h5', 20, DATA_PATH+'/labels_val.h5')
 loader_test = H5ImageLoader(DATA_PATH+'/images_test.h5', 20, DATA_PATH+'/labels_test.h5')
+print("Dataset Loaded: num_train: %d, num_val: %d, num_test: %d" % (loader_train.num_images, loader_val.num_images, loader_test.num_images))
 
 def main():
 
     # Build the model
-    model = build_spark('res50_withdecoder_1kpretrained_spark_style.pth') # Replace with the name of your own pretrained model
-    # model = build_spark('res50_epoch90.pth')
+    # model = build_spark('models/res50_withdecoder_1kpretrained_spark_style.pth') # Replace with the name of your own pretrained model
+    model = build_spark('models/resnet50_100pretrained_timm_style_90.pth')
     print("model built")
 
     model.to(DEVICE)
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
 
-    # Training loop
-    print("start training")
+    # Finetuning loop
+    print("start finetuning")
     for epoch in range(num_epochs): 
         model.train()
         for param in model.parameters():
@@ -108,7 +109,7 @@ def main():
     #visualize_testing(model, loader_test, DEVICE)
 
     # Save the model
-    torch.save(model.state_dict(), os.path.join(save_path, 'best_model.pth'))
+    torch.save(model.state_dict(), os.path.join(model_path, 'best_model.pth'))
     print("Model saved.")
 
 
