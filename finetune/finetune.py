@@ -8,11 +8,15 @@ from network import build_sparse_encoder
 from spark import SparK
 from loss import DiceLoss
 import torch.distributed as dist
-import matplotlib.pyplot as plt
+# import matplotlib.pyplot as plt
 import data
+from PIL import Image
+import numpy as np
 
 # Prepare the dataset
-data.prepare_dataset(ratio_train = 0.7, split_data = True) # ratio_train can be chosen in [0, 0.85], as test set ratio is fixed at 10%
+# ratio_train can be chosen in [0, 0.85], as test set ratio is fixed at 10%
+# split_data should be set to True if: 1. the dataset haven't been downloaded before or 2. the ratio_train is changed
+data.prepare_dataset(ratio_train = 0.7, split_data = False)
 
 # Set the environment variables for distributed training
 os.environ['MASTER_ADDR'] = 'localhost'  # or another appropriate address
@@ -38,7 +42,7 @@ DATA_PATH = './data'
 ## Training parameters
 minibatch_size = 4
 learning_rate = 1e-4
-num_epochs = 2
+num_epochs = 50
 criterion = DiceLoss()
 model_path = "models"
 
@@ -55,7 +59,7 @@ print("Dataset Loaded: num_train: %d, num_val: %d, num_test: %d" % (loader_train
 def main():
 
     # Build the model
-    model = build_spark('resnet50_90epochs_imagenet100pretrained.pth') #Change this to the path of your own pretrained model
+    model = build_spark('resnet50_90epochs_imagenet100pretrained.pth') # Change this to the path of your own pretrained model
     print("model built")
 
     model.to(DEVICE)
@@ -86,12 +90,12 @@ def main():
             running_loss += loss.item()
             batches_processed += 1
 
-            # Report the current average loss after every 500 images
+            # Report the current average loss after every 500 batches
             # if batches_processed % 500 == 0:
-            #     print(f"Processed {batches_processed} batches, Current Loss: {running_loss/batches_processed:.4f}")
-            #     val_loss, val_accuracy = validate_and_test(model, loader_val, criterion, DEVICE, vis=False)
-            #     print(f"Current Validation Loss: {val_loss}")
-            #     print(f"Current Validation Accuracy: {val_accuracy}%")
+            #      print(f"Processed {batches_processed} batches, Current Loss: {running_loss/batches_processed:.4f}")
+            #      val_loss, val_accuracy = validate_and_test(model, loader_val, criterion, DEVICE, vis=True)
+            #      print(f"Current Validation Loss: {val_loss}")
+            #      print(f"Current Validation Accuracy: {val_accuracy}%")
                 
         print(f"Epoch {epoch+1}, Loss: {running_loss/batches_processed}")
         val_loss, val_accuracy = validate_and_test(model, loader_val, criterion, DEVICE, vis=False)
@@ -105,7 +109,7 @@ def main():
     print(f"Test Accuracy: {test_accuracy}")  
 
     # After training, visualize segmentation output
-    #visualize_testing(model, loader_test, DEVICE)
+    visualize_testing(model, loader_test, DEVICE)
 
     # Save the model
     torch.save(model.state_dict(), os.path.join(model_path, 'best_model.pth'))
@@ -191,8 +195,8 @@ def validate_and_test(model, loader, criterion, device, vis):
 
 def visualize_testing(model, loader, device):
     model.eval()
-    images, masks = next(iter(loader))  # Get a batch from the loader
-    images, _ = pre_process(images, masks)
+    images, masks = next(iter(loader)) 
+    images, masks = pre_process(images, masks)
     images = images.permute(0, 3, 1, 2).to(device)
     
     with torch.no_grad():
@@ -203,47 +207,48 @@ def visualize_testing(model, loader, device):
     visualize_images_outputs_and_masks(images, preds, masks)
 
     
-def visualize_images_outputs_and_masks(images, outputs, masks, num_images=minibatch_size):
+def concatenate_images(image_list):
+    widths, heights = zip(*(i.size for i in image_list))
+    total_height = sum(heights)
+    max_width = max(widths)
 
+    new_im = Image.new('RGB', (max_width, total_height))
+
+    y_offset = 0
+    for im in image_list:
+        new_im.paste(im, (0, y_offset))
+        y_offset += im.size[1]
+
+    return new_im
+
+def visualize_images_outputs_and_masks(images, outputs, masks, num_images=minibatch_size):
     # Post-process outputs
     outputs = post_process(outputs)
+    
     # Ensure images, outputs, and masks are tensor type and check dimensions
     if not (images.ndim == 4 and outputs.ndim in [3, 4] and masks.ndim in [3, 4]):
         raise ValueError("Invalid input dimensions")
 
-    # permute images from BxCxHxW to BxHxWxC for matplotlib
+    # Adjust data for PIL
     images = images.permute(0, 2, 3, 1).cpu().detach().numpy()
-
-    # Prepare outputs and masks (handle both cases where outputs and masks might have an extra channel dimension)
     outputs = outputs.squeeze(1).cpu().detach().numpy() if outputs.ndim == 4 else outputs.cpu().detach().numpy()
     masks = masks.squeeze(1).cpu().detach().numpy() if masks.ndim == 4 else masks.cpu().detach().numpy()
 
-    # Normalize images if not in [0, 1]
-    images = (images - images.min(axis=(1, 2, 3), keepdims=True)) / \
-             (images.max(axis=(1, 2, 3), keepdims=True) - images.min(axis=(1, 2, 3), keepdims=True))
-
-    _, axs = plt.subplots(3, num_images, figsize=(num_images * 4, 12))
-    if num_images == 1:
-        axs = axs.reshape(3, 1)  # Make axs 2D in case of single image for uniformity
-
+    # Normalize and convert to uint8
     for i in range(num_images):
-        # Display image
-        axs[0, i].imshow(images[i], interpolation='nearest')
-        axs[0, i].axis('off')
-        axs[0, i].set_title('Input Image')
+        img = ((images[i] - images[i].min()) / (images[i].max() - images[i].min()) * 255).astype(np.uint8)
+        out = (outputs[i] * 255).astype(np.uint8)
+        msk = (masks[i] * 255).astype(np.uint8)
 
-        # Display output
-        axs[1, i].imshow(outputs[i], cmap='gray', interpolation='nearest')
-        axs[1, i].axis('off')
-        axs[1, i].set_title('Prediction')
+        pil_img = Image.fromarray(img, 'RGB')
+        pil_out = Image.fromarray(out, 'L').convert('RGB')
+        pil_msk = Image.fromarray(msk, 'L').convert('RGB')
 
-        # Display mask
-        axs[2, i].imshow(masks[i], cmap='gray', interpolation='nearest')
-        axs[2, i].axis('off')
-        axs[2, i].set_title('Ground Truth')
+        # Combine images vertically
+        combined_image = concatenate_images([pil_img, pil_out, pil_msk])
+        # Save the image
+        combined_image.save(f"result_{i}.png")
 
-    plt.tight_layout()
-    plt.show()
 
 
 def post_process(output):
