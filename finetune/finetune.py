@@ -87,8 +87,8 @@ def main():
             batches_processed += 1
 
             # Report the current average loss after every 500 images
-            if batches_processed % 500 == 0:
-                 print(f"Processed {batches_processed} batches, Current Loss: {running_loss/batches_processed:.4f}")
+            # if batches_processed % 500 == 0:
+            #     print(f"Processed {batches_processed} batches, Current Loss: {running_loss/batches_processed:.4f}")
             #     val_loss, val_accuracy = validate_and_test(model, loader_val, criterion, DEVICE, vis=False)
             #     print(f"Current Validation Loss: {val_loss}")
             #     print(f"Current Validation Accuracy: {val_accuracy}%")
