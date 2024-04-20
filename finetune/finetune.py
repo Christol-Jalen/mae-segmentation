@@ -55,7 +55,7 @@ print("Dataset Loaded: num_train: %d, num_val: %d, num_test: %d" % (loader_train
 def main():
 
     # Build the model
-    model = build_spark('resnet50_90epochs_imagenet100pretrained.pth')
+    model = build_spark('resnet50_90epochs_imagenet100pretrained.pth') #Change this to the path of your own pretrained model
     print("model built")
 
     model.to(DEVICE)
