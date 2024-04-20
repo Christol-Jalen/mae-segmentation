@@ -66,7 +66,7 @@ Make sure the distributed training environment is correctly set up if you plan t
 
 - The training process leverages DistributedDataParallel (DDP) for efficient multi-GPU training.
 - The script is set up to automatically resume training from the last checkpoint if available.
-- Real-time logging can be monitored using TensorBoard if configured.
+- All parameter configuration details are in the utils/arg_util.py file and can be changed as required.
 
 ## Contributing
 
