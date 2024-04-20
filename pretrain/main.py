@@ -87,18 +87,16 @@ def main_pt():
     if ep_start >= args.ep: # load from a complete checkpoint file
         print(f'  [*] [PT already done]    Min/Last Recon Loss: {performance_desc}')
     else:   # perform pre-training
-        tb_lg = misc.TensorboardLogger(args.tb_lg_dir, is_master=dist.is_master(), prefix='pt')
         min_loss = 1e9
         print(f'[PT start] from ep{ep_start}')
         
         pt_start_time = time.time()
         for ep in range(ep_start, args.ep):
             ep_start_time = time.time()
-            tb_lg.set_step(ep * iters_train)
             if hasattr(itrt_train, 'set_epoch'):
                 itrt_train.set_epoch(ep)
             
-            stats = pre_train_one_ep(ep, args, tb_lg, itrt_train, iters_train, model, optimizer)
+            stats = pre_train_one_ep(ep, args, itrt_train, iters_train, model, optimizer)
             last_loss = stats['last_loss']
             min_loss = min(min_loss, last_loss)
             performance_desc = f'{min_loss:.4f} {last_loss:.4f}'
@@ -115,27 +113,19 @@ def main_pt():
             args.remain_time, args.finish_time = str(remain_time), str(finish_time)
             args.last_loss = last_loss
             args.log_epoch()
-            
-            tb_lg.update(min_loss=min_loss, head='train', step=ep)
-            tb_lg.update(rest_hours=round(remain_secs/60/60, 2), head='z_burnout', step=ep)
-            tb_lg.flush()
         
         # finish pre-training
-        tb_lg.update(min_loss=min_loss, head='result', step=ep_start)
-        tb_lg.update(min_loss=min_loss, head='result', step=args.ep)
-        tb_lg.flush()
         print(f'final args:\n{str(args)}')
         print('\n\n')
         print(f'  [*] [PT finished]    Min/Last Recon Loss: {performance_desc},    Total Cost: {(time.time() - pt_start_time) / 60 / 60:.1f}h\n')
         print('\n\n')
-        tb_lg.close()
         time.sleep(10)
     
     args.remain_time, args.finish_time = '-', time.strftime("%m-%d %H:%M", time.localtime(time.time()))
     args.log_epoch()
 
 
-def pre_train_one_ep(ep, args: arg_util.Args, tb_lg: misc.TensorboardLogger, itrt_train, iters_train, model: DistributedDataParallel, optimizer):
+def pre_train_one_ep(ep, args: arg_util.Args, itrt_train, iters_train, model: DistributedDataParallel, optimizer):
     model.train()
     me = misc.MetricLogger(delimiter='  ')
     me.add_meter('max_lr', misc.SmoothedValue(window_size=1, fmt='{value:.5f}'))
@@ -172,16 +162,9 @@ def pre_train_one_ep(ep, args: arg_util.Args, tb_lg: misc.TensorboardLogger, itr
         # log
         me.update(last_loss=loss)
         me.update(max_lr=max_lr)
-        tb_lg.update(loss=me.meters['last_loss'].global_avg, head='train_loss')
-        tb_lg.update(sche_lr=max_lr, head='train_hp/lr_max')
-        tb_lg.update(sche_lr=min_lr, head='train_hp/lr_min')
-        tb_lg.update(sche_wd=max_wd, head='train_hp/wd_max')
-        tb_lg.update(sche_wd=min_wd, head='train_hp/wd_min')
         
         if grad_norm is not None:
             me.update(orig_norm=grad_norm)
-            tb_lg.update(orig_norm=grad_norm, head='train_hp')
-        tb_lg.set_step()
     
     me.synchronize_between_processes()
     return {k: meter.global_avg for k, meter in me.meters.items()}

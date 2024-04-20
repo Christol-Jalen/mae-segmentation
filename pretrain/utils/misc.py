@@ -16,7 +16,6 @@ from typing import Iterator
 import numpy as np
 import pytz
 import torch
-from torch.utils.tensorboard import SummaryWriter
 
 import dist
 
@@ -84,60 +83,6 @@ class _SyncPrintToFile(object):
     def flush(self):
         self.terminal.flush()
         self.log.flush()
-
-
-class TensorboardLogger(object):
-    def __init__(self, log_dir, is_master, prefix='pt'):
-        self.is_master = is_master
-        self.writer = SummaryWriter(log_dir=log_dir) if self.is_master else None
-        self.step = 0
-        self.prefix = prefix
-        self.log_freq = 300
-    
-    def set_step(self, step=None):
-        if step is not None:
-            self.step = step
-        else:
-            self.step += 1
-    
-    def get_loggable(self, step=None):
-        if step is None:  # iter wise
-            step = self.step
-            loggable = step % self.log_freq == 0
-        else:  # epoch wise
-            loggable = True
-        return step, (loggable and self.is_master)
-    
-    def update(self, head='scalar', step=None, **kwargs):
-        step, loggable = self.get_loggable(step)
-        if loggable:
-            head = f'{self.prefix}_{head}'
-            for k, v in kwargs.items():
-                if v is None:
-                    continue
-                if isinstance(v, torch.Tensor):
-                    v = v.item()
-                assert isinstance(v, (float, int))
-                self.writer.add_scalar(head + "/" + k, v, step)
-    
-    def log_distribution(self, tag, values, step=None):
-        step, loggable = self.get_loggable(step)
-        if loggable:
-            if not isinstance(values, torch.Tensor):
-                values = torch.tensor(values)
-            self.writer.add_histogram(tag=tag, values=values, global_step=step)
-    
-    def log_image(self, tag, img, step=None, dataformats='NCHW'):
-        step, loggable = self.get_loggable(step)
-        if loggable:
-            # img = img.cpu().numpy()
-            self.writer.add_image(tag, img, step, dataformats=dataformats)
-    
-    def flush(self):
-        if self.is_master: self.writer.flush()
-    
-    def close(self):
-        if self.is_master: self.writer.close()
 
 
 def save_checkpoint_with_meta_info_and_opt_state(save_to, args, epoch, performance_desc, model_without_ddp_state, optimizer_state):
