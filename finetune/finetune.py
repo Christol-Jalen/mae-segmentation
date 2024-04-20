@@ -104,12 +104,10 @@ def main():
         # visualize_images_outputs_and_masks(images, outputs, masks)
 
     # Test the model after training
+    print("Training finished. Testing the model.")
     test_loss, test_accuracy = validate_and_test(model, loader_test, criterion, DEVICE, vis=True)
     print(f"Training finished.\nTest Loss: {test_loss}")
     print(f"Test Accuracy: {test_accuracy}")  
-
-    # After training, visualize segmentation output
-    visualize_testing(model, loader_test, DEVICE)
 
     # Save the model
     torch.save(model.state_dict(), os.path.join(model_path, 'best_model.pth'))
@@ -191,20 +189,6 @@ def validate_and_test(model, loader, criterion, device, vis):
         visualize_images_outputs_and_masks(images, outputs, masks)
     
     return avg_loss, accuracy
-
-
-def visualize_testing(model, loader, device):
-    model.eval()
-    images, masks = next(iter(loader)) 
-    images, masks = pre_process(images, masks)
-    images = images.permute(0, 3, 1, 2).to(device)
-    
-    with torch.no_grad():
-        preds = model(images, active_b1ff=None)
-    preds = preds.sigmoid().cpu()
-
-    # Plotting
-    visualize_images_outputs_and_masks(images, preds, masks)
 
     
 def concatenate_images(image_list):
