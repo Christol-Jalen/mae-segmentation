@@ -36,7 +36,7 @@ DATA_PATH = './data'
 
 
 ## Training parameters
-minibatch_size = 1
+minibatch_size = 4
 learning_rate = 1e-4
 num_epochs = 2
 criterion = DiceLoss()
@@ -87,14 +87,14 @@ def main():
             batches_processed += 1
 
             # Report the current average loss after every 500 images
-            # if batches_processed % 500 == 0:
-            #     print(f"Processed {batches_processed} batches, Current Loss: {running_loss/batches_processed:.4f}")
+            if batches_processed % 500 == 0:
+                 print(f"Processed {batches_processed} batches, Current Loss: {running_loss/batches_processed:.4f}")
             #     val_loss, val_accuracy = validate_and_test(model, loader_val, criterion, DEVICE, vis=False)
             #     print(f"Current Validation Loss: {val_loss}")
             #     print(f"Current Validation Accuracy: {val_accuracy}%")
                 
         print(f"Epoch {epoch+1}, Loss: {running_loss/batches_processed}")
-        val_loss, val_accuracy = validate_and_test(model, loader_val, criterion, DEVICE, vis=True)
+        val_loss, val_accuracy = validate_and_test(model, loader_val, criterion, DEVICE, vis=False)
         # print(f"Epoch {epoch+1}, Validation Loss: {val_loss}")
         print(f"Epoch {epoch+1}, Validation Accuracy: {val_accuracy}%")
         # visualize_images_outputs_and_masks(images, outputs, masks)
