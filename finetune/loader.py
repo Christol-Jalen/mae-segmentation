@@ -39,3 +39,7 @@ class H5ImageLoader():
         labels = None if (self.seg_h5 is None) else [self.seg_h5[ds][()]==1 for ds in datasets] # foreground only
 
         return images, labels
+    
+    def close(self):
+        self.img_h5.close()
+        self.seg_h5.close()
