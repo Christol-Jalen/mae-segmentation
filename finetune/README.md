@@ -26,3 +26,5 @@ $ cd PATH/TO/Applied-Deep-Learning-CW3/finetune
 $ python finetune.py
 ```
 
+The fine-tuned pretrained and baseline model can be downloaded from this [link](https://drive.google.com/drive/folders/1Nwg05CYvzPM2awR39qaP733kSGx6PcJj?usp=drive_link)
+
