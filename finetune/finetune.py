@@ -11,7 +11,7 @@ import torch.distributed as dist
 import data
 from PIL import Image, ImageDraw, ImageFont
 import numpy as np
-import matplotlib.pyplot as plt
+#import matplotlib.pyplot as plt
 import json
 
 # Prepare the dataset
@@ -185,7 +185,7 @@ def main():
 
     # Plot and save the loss and accuracy curves using Pillow and Matplotlib
     plot_loss_and_accuracy_pillow(train_losses_all, val_losses_all, train_accuracies_all, val_accuracies_all, pretrained_models)
-    plot_loss_and_accuracy_matplotlib(train_losses_all, val_losses_all, train_accuracies_all, val_accuracies_all, pretrained_models)
+    #plot_loss_and_accuracy_matplotlib(train_losses_all, val_losses_all, train_accuracies_all, val_accuracies_all, pretrained_models)
 
 
 def build_spark(your_own_pretrained_ckpt: str):
@@ -464,40 +464,40 @@ def plot_loss_and_accuracy_pillow(train_losses_all, val_losses_all, train_accura
     # Save the image
     img.save(os.path.join(results_path, "loss_and_accuracy.png"))
 
-def plot_loss_and_accuracy_matplotlib(train_losses_all, val_losses_all, train_accuracies_all, val_accuracies_all, pretrained_models):
-    epochs = range(1, len(train_losses_all[0]) + 1)
+# def plot_loss_and_accuracy_matplotlib(train_losses_all, val_losses_all, train_accuracies_all, val_accuracies_all, pretrained_models):
+#     epochs = range(1, len(train_losses_all[0]) + 1)
 
-    # Create a figure with two subplots
-    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(8, 8))
+#     # Create a figure with two subplots
+#     fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(8, 8))
 
-    # Plot loss
-    for model_idx, (model_name, _) in enumerate(pretrained_models):
-        train_losses = train_losses_all[model_idx]
-        val_losses = val_losses_all[model_idx]
-        ax1.plot(epochs, train_losses, f'C{model_idx}-', label=f'{model_name} Training Loss')
-        ax1.plot(epochs, val_losses, f'C{model_idx}--', label=f'{model_name} Validation Loss')
-    ax1.set_title('Loss')
-    ax1.set_xlabel('Epoch')
-    ax1.set_ylabel('Loss')
-    ax1.legend()
+#     # Plot loss
+#     for model_idx, (model_name, _) in enumerate(pretrained_models):
+#         train_losses = train_losses_all[model_idx]
+#         val_losses = val_losses_all[model_idx]
+#         ax1.plot(epochs, train_losses, f'C{model_idx}-', label=f'{model_name} Training Loss')
+#         ax1.plot(epochs, val_losses, f'C{model_idx}--', label=f'{model_name} Validation Loss')
+#     ax1.set_title('Loss')
+#     ax1.set_xlabel('Epoch')
+#     ax1.set_ylabel('Loss')
+#     ax1.legend()
 
-    # Plot accuracy
-    for model_idx, (model_name, _) in enumerate(pretrained_models):
-        train_accuracies = train_accuracies_all[model_idx]
-        val_accuracies = val_accuracies_all[model_idx]
-        ax2.plot(epochs, train_accuracies, f'C{model_idx}-', label=f'{model_name} Training Accuracy')
-        ax2.plot(epochs, val_accuracies, f'C{model_idx}--', label=f'{model_name} Validation Accuracy')
-    ax2.set_title('Accuracy')
-    ax2.set_xlabel('Epoch')
-    ax2.set_ylabel('Accuracy')
-    ax2.legend()
+#     # Plot accuracy
+#     for model_idx, (model_name, _) in enumerate(pretrained_models):
+#         train_accuracies = train_accuracies_all[model_idx]
+#         val_accuracies = val_accuracies_all[model_idx]
+#         ax2.plot(epochs, train_accuracies, f'C{model_idx}-', label=f'{model_name} Training Accuracy')
+#         ax2.plot(epochs, val_accuracies, f'C{model_idx}--', label=f'{model_name} Validation Accuracy')
+#     ax2.set_title('Accuracy')
+#     ax2.set_xlabel('Epoch')
+#     ax2.set_ylabel('Accuracy')
+#     ax2.legend()
 
-    # Adjust spacing between subplots
-    plt.tight_layout()
+#     # Adjust spacing between subplots
+#     plt.tight_layout()
 
-    # Save the plot
-    plt.savefig(os.path.join(results_path, 'loss_and_accuracy_matplotlib.png'))
-    plt.close()
+#     # Save the plot
+#     plt.savefig(os.path.join(results_path, 'loss_and_accuracy_matplotlib.png'))
+#     plt.close()
 
 if __name__ == '__main__':
     main()
