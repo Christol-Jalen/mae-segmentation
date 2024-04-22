@@ -11,7 +11,7 @@ import torch
 import torch.nn as nn
 from timm.models.layers import trunc_normal_
 
-from utils.misc import is_pow2n
+# from utils.misc import is_pow2n
 
 
 class UNetBlock(nn.Module):
@@ -35,7 +35,7 @@ class LightDecoder(nn.Module):
     def __init__(self, up_sample_ratio, width=768, sbn=True, output_channels=1):   # added output_channels input
         super().__init__()
         self.width = width
-        assert is_pow2n(up_sample_ratio)
+        # assert is_pow2n(up_sample_ratio)
         n = round(math.log2(up_sample_ratio))
         channels = [self.width // 2 ** i for i in range(n + 1)] # todo: the decoder's width follows a simple halfing rule; you can change it to any other rule
         bn2d = nn.SyncBatchNorm if sbn else nn.BatchNorm2d
