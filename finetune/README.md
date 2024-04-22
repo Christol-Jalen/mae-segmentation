@@ -25,6 +25,9 @@ $ pip install -r requirements.txt
 $ cd PATH/TO/Applied-Deep-Learning-CW3/finetune
 $ python finetune.py
 ```
-
 The fine-tuned pretrained and baseline model can be downloaded from this [link](https://drive.google.com/drive/folders/1Nwg05CYvzPM2awR39qaP733kSGx6PcJj?usp=drive_link)
+
+5. The experiment on changing the training set size of the finetune process is performed by [exp_size.ipynb](https://github.com/Christol-Jalen/Applied-Deep-Learning-CW3/blob/main/finetune/exp_size.ipynb).
+
+   Running the code blocks in sequence could generate all of the results of the second experiment of MRP including plottings, segmentation results, and data, which will all be stored in an automatically created folder ```finetune/exp_img```.
 
