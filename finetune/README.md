@@ -16,7 +16,7 @@ $ pip install -r requirements.txt
 ```
 
 3. Download the pretrained and baseline model from this [link](https://drive.google.com/drive/folders/1MjumQDNd3HwciWDj8OLQIcusyN3xTRiJ?usp=sharing)
-   and save the them to the directory ```finetune/models```
+   and save the them to the current directory
 
 
 4. Start fine-tuning on Oxford-IIIT Pet Dataset (dataset will be automatically downloaded if not exist):
