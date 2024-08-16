@@ -37,7 +37,7 @@ Comparing the pre-trained model with the baseline model.
 The graph below shows the loss and accuracy with respect to training epochs, for both pre-trained model and the baseline model. In the loss graph, both training loss and vali-dation loss of the baseline model converge slower than the pretrained model, and the baseline model’s steady-state validation loss is also higher than the pretrained model. The same phenomenon is observed in terms of accuracy, where the baseline model’s accuracy converges slower, and the steady-state accuracy on validation dataset is low-er, compared to the pre-trained model.
 
 <div style="display: flex; justify-content: space-between;">
-  <img src="./images/result2.jpg" alt="Image" style="width: 60%;"/>
+  <img src="./images/result2.jpg" alt="Image" style="width: 80%;"/>
 </div>
 
 ## Reference
