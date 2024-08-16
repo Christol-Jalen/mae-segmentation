@@ -23,7 +23,7 @@ Finetune: [Tutorial](https://github.com/Christol-Jalen/mae-segmentation/blob/mai
 
 ## Results
 
-The fine-tune results are shown in the figure below, it has the following key metrics:
+The fine-tune results are shown in the figure below,  here are some of the key metrics:
 
 • Test Loss: 0.1899
 
