@@ -26,6 +26,7 @@ Finetune: [Tutorial](https://github.com/Christol-Jalen/mae-segmentation/blob/mai
 The fine-tune results are shown in the figure below, it has the following key metrics:
 
 • Test Loss: 0.1899
+
 • Accuracy: 90.5%
 
 <div style="display: flex; justify-content: space-between;">
